@@ -1,17 +1,18 @@
 package com.studento.telegramcast;
 
 import android.app.Activity;
-import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -23,79 +24,68 @@ import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.PlayerView;
 
-import org.json.JSONArray;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends Activity {
-    private static final String PREFS = "telegram_tv_cast";
-    private static final String TOKEN = "bot_token";
-    private static final String DEFAULT_BOT_TOKEN = BuildConfig.DEFAULT_BOT_TOKEN;
-    private static final String CHAT_ID = "chat_id";
-    private static final String LAST_UPDATE_ID = "last_update_id";
-    private static final long POLL_INTERVAL_MS = 3000L;
-    private static final Pattern URL_PATTERN = Pattern.compile("https?://[^\\s)\\]}>\\\"]+");
-    private static final Pattern TOKEN_PATTERN = Pattern.compile("\\d{6,}:[-_A-Za-z0-9]{20,}");
-    private static final String TOKEN_MASK = "<bot-token>";
+    private static final String SERVER_URL = trimUrl(BuildConfig.SERVER_URL);
+
+    private static final int COLOR_TEXT = 0xFFFFFFFF;
+    private static final int COLOR_MUTED = 0xFF9FB9C8;
+    private static final int DOT_WAITING = 0xFFF2B23E;
+    private static final int DOT_LIVE = 0xFF43C463;
+    private static final int DOT_ERROR = 0xFFE0584F;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private ScrollView setupView;
+    private FrameLayout playerContainer;
     private PlayerView playerView;
     private ExoPlayer player;
-    private EditText tokenInput;
-    private EditText chatInput;
+    private TextView codeView;
+    private TextView pairHint;
     private TextView status;
-    private TextView chatHelp;
+    private View statusDot;
+    private ImageView qrView;
     private TextView nowPlaying;
     private ProgressBar progress;
-    private Button connectButton;
-    private Button disconnectButton;
-    private int lastUpdateId = 0;
-    private boolean polling;
-    private boolean requestInFlight;
 
-    private final Runnable poller = new Runnable() {
-        @Override
-        public void run() {
-            if (!polling) {
-                return;
-            }
-            pollTelegram();
-            handler.postDelayed(this, POLL_INTERVAL_MS);
-        }
-    };
+    private volatile boolean running;
+    private volatile String deviceId;
+    private String botUsername = "";
+    private boolean paired;
+
+    private static String trimUrl(String url) {
+        if (url == null) return "";
+        return url.replaceAll("/+$", "");
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         buildUi();
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        tokenInput.setText(prefs.getString(TOKEN, DEFAULT_BOT_TOKEN));
-        chatInput.setText(prefs.getString(CHAT_ID, ""));
-        lastUpdateId = prefs.getInt(LAST_UPDATE_ID, 0);
-        if (tokenInput.getText().length() > 0) {
-            status.setText("Bot token loaded. Press Connect to start casting.");
+        if (SERVER_URL.isEmpty()) {
+            setStatus(getString(R.string.status_not_configured), DOT_ERROR);
+            return;
         }
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        stopPolling();
-        if (player != null && player.isPlaying()) {
-            player.pause();
-        }
+        running = true;
+        new Thread(this::networkLoop).start();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        running = false;
         if (player != null) {
             player.release();
             player = null;
@@ -112,328 +102,426 @@ public class MainActivity extends Activity {
             togglePlayback();
             return true;
         }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_STOP) {
+        boolean playerVisible = playerContainer.getVisibility() == View.VISIBLE;
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_STOP
+                || (keyCode == KeyEvent.KEYCODE_BACK && playerVisible)) {
             if (player.getPlaybackState() != Player.STATE_IDLE) {
                 player.stop();
                 player.clearMediaItems();
-                nowPlaying.setText("No video playing.");
-                status.setText("Playback stopped.");
-                return true;
             }
+            showSetup(getString(R.string.status_stopped));
+            return true;
         }
         return super.dispatchKeyEvent(event);
     }
 
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    // ---------------------------------------------------------------- UI
+
     private void buildUi() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(48, 36, 48, 36);
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setBackgroundColor(0xFF101820);
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundResource(R.drawable.bg_screen);
+        root.addView(buildSetup(), new FrameLayout.LayoutParams(-1, -1));
 
-        TextView title = new TextView(this);
-        title.setText("Telegram TV Cast");
-        title.setTextColor(0xFFFFFFFF);
-        title.setTextSize(30);
-        title.setGravity(Gravity.CENTER);
-        root.addView(title, new LinearLayout.LayoutParams(-1, -2));
-
-        TextView instructions = new TextView(this);
-        instructions.setText("Enter your Telegram bot token, send a video link or video file to the bot, and this TV starts playback automatically. Commands: /pause, /resume, /stop.");
-        instructions.setTextColor(0xFFD6E4F0);
-        instructions.setTextSize(16);
-        instructions.setGravity(Gravity.CENTER);
-        root.addView(instructions, new LinearLayout.LayoutParams(-1, -2));
-
-        tokenInput = new EditText(this);
-        tokenInput.setHint("Telegram bot token (from BotFather)");
-        tokenInput.setSingleLine(true);
-        tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-        tokenInput.setTextColor(0xFFFFFFFF);
-        tokenInput.setHintTextColor(0xFF8FA7B5);
-        root.addView(tokenInput, new LinearLayout.LayoutParams(-1, -2));
-
-        chatInput = new EditText(this);
-        chatInput.setHint("Allowed chat ID (optional, shown after first message)");
-        chatInput.setSingleLine(true);
-        chatInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-        chatInput.setTextColor(0xFFFFFFFF);
-        chatInput.setHintTextColor(0xFF8FA7B5);
-        root.addView(chatInput, new LinearLayout.LayoutParams(-1, -2));
-
-        LinearLayout buttons = new LinearLayout(this);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
-        buttons.setGravity(Gravity.CENTER);
-        connectButton = new Button(this);
-        connectButton.setText("Connect");
-        connectButton.setOnClickListener(v -> startTelegramCasting());
-        buttons.addView(connectButton, new LinearLayout.LayoutParams(0, -2, 1));
-        disconnectButton = new Button(this);
-        disconnectButton.setText("Disconnect");
-        disconnectButton.setEnabled(false);
-        disconnectButton.setOnClickListener(v -> stopPolling());
-        buttons.addView(disconnectButton, new LinearLayout.LayoutParams(0, -2, 1));
-        root.addView(buttons, new LinearLayout.LayoutParams(-1, -2));
-
-        progress = new ProgressBar(this);
-        progress.setVisibility(View.GONE);
-        root.addView(progress, new LinearLayout.LayoutParams(-2, -2));
-
-        status = new TextView(this);
-        status.setText("Waiting for Telegram connection.");
-        status.setTextColor(0xFFFFFFFF);
-        status.setTextSize(18);
-        status.setGravity(Gravity.CENTER);
-        root.addView(status, new LinearLayout.LayoutParams(-1, -2));
-
-        chatHelp = new TextView(this);
-        chatHelp.setText("Tip: leave chat ID blank at first; the app will show the chat ID for incoming messages.");
-        chatHelp.setTextColor(0xFF9FB9C8);
-        chatHelp.setTextSize(14);
-        chatHelp.setGravity(Gravity.CENTER);
-        root.addView(chatHelp, new LinearLayout.LayoutParams(-1, -2));
-
-        nowPlaying = new TextView(this);
-        nowPlaying.setText("No video playing.");
-        nowPlaying.setTextColor(0xFFD6E4F0);
-        nowPlaying.setTextSize(14);
-        nowPlaying.setGravity(Gravity.CENTER);
-        root.addView(nowPlaying, new LinearLayout.LayoutParams(-1, -2));
+        playerContainer = new FrameLayout(this);
+        playerContainer.setBackgroundColor(Color.BLACK);
+        playerContainer.setVisibility(View.GONE);
 
         player = new ExoPlayer.Builder(this).build();
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int playbackState) {
-                if (playbackState == Player.STATE_BUFFERING) {
-                    status.setText("Buffering...");
-                } else if (playbackState == Player.STATE_READY) {
-                    status.setText("Playing. Use TV OK/play-pause or Telegram commands to control playback.");
-                } else if (playbackState == Player.STATE_ENDED) {
-                    status.setText("Playback complete. Send another video to cast again.");
+                if (playbackState == Player.STATE_ENDED) {
+                    showSetup(getString(R.string.status_complete));
                 }
             }
 
             @Override
             public void onPlayerError(PlaybackException error) {
-                status.setText("Unable to play this media. Send a direct MP4/HLS URL or a Telegram video file.");
+                showSetup(getString(R.string.status_error_play));
             }
         });
 
         playerView = new PlayerView(this);
         playerView.setPlayer(player);
         playerView.setUseController(true);
-        root.addView(playerView, new LinearLayout.LayoutParams(-1, 0, 1));
+        playerContainer.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(root);
-        setContentView(scroll);
+        nowPlaying = new TextView(this);
+        nowPlaying.setText(R.string.now_playing_none);
+        nowPlaying.setTextColor(COLOR_TEXT);
+        nowPlaying.setTextSize(16);
+        nowPlaying.setShadowLayer(8f, 0f, 2f, 0xCC000000);
+        nowPlaying.setPadding(dp(28), dp(22), dp(28), dp(22));
+        playerContainer.addView(nowPlaying, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
+
+        root.addView(playerContainer, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(root);
     }
 
-    private void startTelegramCasting() {
-        String token = tokenInput.getText().toString().trim();
-        if (!TOKEN_PATTERN.matcher(token).matches()) {
-            status.setText("Enter a valid Telegram bot token first. I need your bot API token here to connect.");
-            return;
-        }
-        getSharedPreferences(PREFS, MODE_PRIVATE)
-                .edit()
-                .putString(TOKEN, token)
-                .putString(CHAT_ID, chatInput.getText().toString().trim())
-                .apply();
-        status.setText("Connected. Send a direct video URL or Telegram video file to your bot.");
-        polling = true;
-        connectButton.setEnabled(false);
-        disconnectButton.setEnabled(true);
-        handler.removeCallbacks(poller);
-        handler.post(poller);
+    private ScrollView buildSetup() {
+        LinearLayout columns = new LinearLayout(this);
+        columns.setOrientation(LinearLayout.HORIZONTAL);
+        columns.setPadding(dp(56), dp(48), dp(56), dp(48));
+        columns.addView(buildBrandPanel(), new LinearLayout.LayoutParams(dp(380), -1));
+
+        View spacer = new View(this);
+        columns.addView(spacer, new LinearLayout.LayoutParams(dp(48), 1));
+
+        columns.addView(buildCard(), new LinearLayout.LayoutParams(0, -2, 1f));
+
+        setupView = new ScrollView(this);
+        setupView.setFillViewport(true);
+        setupView.addView(columns, new ScrollView.LayoutParams(-1, -1));
+        return setupView;
     }
 
-    private void stopPolling() {
-        polling = false;
-        requestInFlight = false;
-        handler.removeCallbacks(poller);
-        if (progress != null) {
-            progress.setVisibility(View.GONE);
-        }
-        if (connectButton != null) {
-            connectButton.setEnabled(true);
-        }
-        if (disconnectButton != null) {
-            disconnectButton.setEnabled(false);
-        }
-        if (status != null) {
-            status.setText("Disconnected from Telegram.");
-        }
+    private LinearLayout buildBrandPanel() {
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+
+        FrameLayout logo = new FrameLayout(this);
+        logo.setBackgroundResource(R.drawable.bg_logo);
+        ImageView glyph = new ImageView(this);
+        glyph.setImageResource(R.drawable.ic_logo);
+        logo.addView(glyph, new FrameLayout.LayoutParams(dp(64), dp(64), Gravity.CENTER));
+        brand.addView(logo, new LinearLayout.LayoutParams(dp(112), dp(112)));
+
+        TextView title = new TextView(this);
+        title.setText(R.string.brand_title);
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(46);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setLineSpacing(0f, 1.02f);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(-2, -2);
+        titleParams.topMargin = dp(28);
+        brand.addView(title, titleParams);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText(R.string.brand_subtitle);
+        subtitle.setTextColor(COLOR_MUTED);
+        subtitle.setTextSize(18);
+        LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(-2, -2);
+        subParams.topMargin = dp(20);
+        brand.addView(subtitle, subParams);
+
+        return brand;
     }
 
-    private void pollTelegram() {
-        if (requestInFlight) {
-            return;
+    private LinearLayout buildCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackgroundResource(R.drawable.bg_card);
+        card.setPadding(dp(44), dp(40), dp(44), dp(40));
+
+        TextView header = new TextView(this);
+        header.setText(R.string.pair_header);
+        header.setTextColor(COLOR_TEXT);
+        header.setTextSize(28);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(header, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(-1, -2);
+        bodyParams.topMargin = dp(20);
+        card.addView(body, bodyParams);
+
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        body.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        left.addView(buildStep(1, getString(R.string.step_1)), stepParams());
+        left.addView(buildStep(2, getString(R.string.step_2)), stepParams());
+        left.addView(buildStep(3, getString(R.string.step_3)), stepParams());
+
+        TextView codeLabel = new TextView(this);
+        codeLabel.setText(R.string.code_label);
+        codeLabel.setTextColor(0xFF8FA7B5);
+        codeLabel.setTextSize(16);
+        LinearLayout.LayoutParams codeLabelParams = new LinearLayout.LayoutParams(-2, -2);
+        codeLabelParams.topMargin = dp(28);
+        codeLabelParams.bottomMargin = dp(10);
+        left.addView(codeLabel, codeLabelParams);
+
+        codeView = new TextView(this);
+        codeView.setText("------");
+        codeView.setTextColor(0xFFEAF4FB);
+        codeView.setTextSize(44);
+        codeView.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        codeView.setLetterSpacing(0.25f);
+        codeView.setBackgroundResource(R.drawable.bg_field);
+        codeView.setPadding(dp(24), dp(16), dp(24), dp(16));
+        left.addView(codeView, new LinearLayout.LayoutParams(-2, -2));
+
+        pairHint = new TextView(this);
+        pairHint.setText(R.string.status_connecting);
+        pairHint.setTextColor(COLOR_MUTED);
+        pairHint.setTextSize(16);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-2, -2);
+        hintParams.topMargin = dp(14);
+        left.addView(pairHint, hintParams);
+
+        LinearLayout right = new LinearLayout(this);
+        right.setOrientation(LinearLayout.VERTICAL);
+        right.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(-2, -2);
+        rightParams.leftMargin = dp(28);
+        body.addView(right, rightParams);
+
+        qrView = new ImageView(this);
+        qrView.setBackgroundColor(0xFFFFFFFF);
+        qrView.setPadding(dp(10), dp(10), dp(10), dp(10));
+        qrView.setVisibility(View.INVISIBLE);
+        right.addView(qrView, new LinearLayout.LayoutParams(dp(190), dp(190)));
+
+        TextView scanLabel = new TextView(this);
+        scanLabel.setText(R.string.scan_label);
+        scanLabel.setTextColor(COLOR_MUTED);
+        scanLabel.setTextSize(14);
+        scanLabel.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(dp(190), -2);
+        scanParams.topMargin = dp(10);
+        right.addView(scanLabel, scanParams);
+
+        progress = new ProgressBar(this);
+        progress.setVisibility(View.GONE);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(36), dp(36));
+        progressParams.topMargin = dp(22);
+        card.addView(progress, progressParams);
+
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams statusRowParams = new LinearLayout.LayoutParams(-1, -2);
+        statusRowParams.topMargin = dp(26);
+        card.addView(statusRow, statusRowParams);
+
+        statusDot = new View(this);
+        statusDot.setBackgroundResource(R.drawable.dot);
+        if (statusDot.getBackground() != null) statusDot.getBackground().setTint(DOT_WAITING);
+        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(12), dp(12));
+        dotParams.rightMargin = dp(12);
+        statusRow.addView(statusDot, dotParams);
+
+        status = new TextView(this);
+        status.setText(R.string.status_starting);
+        status.setTextColor(0xFFCBE0EC);
+        status.setTextSize(18);
+        statusRow.addView(status, new LinearLayout.LayoutParams(-2, -2));
+
+        return card;
+    }
+
+    private LinearLayout.LayoutParams stepParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
+        params.topMargin = dp(14);
+        return params;
+    }
+
+    private LinearLayout buildStep(int number, String label) {
+        LinearLayout step = new LinearLayout(this);
+        step.setOrientation(LinearLayout.HORIZONTAL);
+        step.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView num = new TextView(this);
+        num.setText(String.valueOf(number));
+        num.setTextColor(0xFF5FC2EE);
+        num.setTextSize(16);
+        num.setGravity(Gravity.CENTER);
+        num.setBackgroundResource(R.drawable.bg_field);
+        LinearLayout.LayoutParams numParams = new LinearLayout.LayoutParams(dp(34), dp(34));
+        numParams.rightMargin = dp(14);
+        step.addView(num, numParams);
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextColor(0xFFC7D8E4);
+        text.setTextSize(18);
+        step.addView(text, new LinearLayout.LayoutParams(-2, -2));
+        return step;
+    }
+
+    // ---------------------------------------------------------------- networking
+
+    private void networkLoop() {
+        while (running && !register()) {
+            sleep(4000);
         }
-        requestInFlight = true;
-        progress.setVisibility(View.VISIBLE);
-        String token = tokenInput.getText().toString().trim();
-        String endpoint = "https://api.telegram.org/bot" + token + "/getUpdates?timeout=1&offset=" + (lastUpdateId + 1);
-        new Thread(() -> {
+        while (running) {
             try {
-                String json = get(endpoint);
-                JSONObject response = new JSONObject(json);
-                if (!response.optBoolean("ok")) {
-                    showStatus("Telegram rejected the token or request: " + response.optString("description"));
-                    return;
+                String body = httpGet(SERVER_URL + "/api/poll?deviceId=" + deviceId, 30000);
+                JSONObject json = new JSONObject(body);
+                boolean nowPaired = json.optBoolean("paired");
+                if (nowPaired && !paired) {
+                    paired = true;
+                    showStatus(getString(R.string.status_paired), DOT_LIVE);
+                    handler.post(() -> pairHint.setText(getString(R.string.pair_hint_paired, botUsername)));
                 }
-                JSONArray updates = response.optJSONArray("result");
-                if (updates == null || updates.length() == 0) {
-                    showStatus("Connected. Waiting for a Telegram video URL or video file...");
-                    return;
+                JSONObject command = json.optJSONObject("command");
+                if (command != null) {
+                    handleCommand(command);
                 }
-                for (int i = 0; i < updates.length(); i++) {
-                    JSONObject update = updates.getJSONObject(i);
-                    lastUpdateId = Math.max(lastUpdateId, update.optInt("update_id"));
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putInt(LAST_UPDATE_ID, lastUpdateId).apply();
-                    JSONObject message = update.optJSONObject("message");
-                    if (message == null) {
-                        message = update.optJSONObject("channel_post");
-                    }
-                    handleMessage(message, token);
-                }
-            } catch (Exception exception) {
-                showStatus("Telegram connection error: " + exception.getMessage());
-            } finally {
-                requestInFlight = false;
-                handler.post(() -> progress.setVisibility(View.GONE));
-            }
-        }).start();
-    }
-
-    private void handleMessage(JSONObject message, String token) throws Exception {
-        if (message == null) {
-            return;
-        }
-        JSONObject chat = message.optJSONObject("chat");
-        String incomingChatId = chat == null ? "unknown" : String.valueOf(chat.optLong("id"));
-        String incomingChatTitle = chat == null ? "chat" : chat.optString("title", chat.optString("first_name", "chat"));
-        showChatHelp("Last message came from " + incomingChatTitle + " (chat ID: " + incomingChatId + ").");
-
-        String allowedChat = chatInput.getText().toString().trim();
-        if (!allowedChat.isEmpty() && !allowedChat.equals(incomingChatId)) {
-            showStatus("Ignored message from another chat: " + incomingChatId);
-            return;
-        }
-
-        String text = message.optString("text", message.optString("caption", "")).trim();
-        String command = text.toLowerCase(Locale.US);
-        if (command.startsWith("/pause")) {
-            handler.post(() -> {
-                if (player.isPlaying()) {
-                    player.pause();
-                }
-                status.setText("Paused from Telegram.");
-            });
-            return;
-        }
-        if (command.startsWith("/stop")) {
-            handler.post(() -> {
-                player.stop();
-                player.clearMediaItems();
-                nowPlaying.setText("No video playing.");
-                status.setText("Stopped from Telegram.");
-            });
-            return;
-        }
-
-        Matcher matcher = URL_PATTERN.matcher(text);
-        if (matcher.find()) {
-            playUrl(matcher.group());
-            return;
-        }
-
-        if (command.startsWith("/resume") || command.equals("/play")) {
-            handler.post(() -> {
-                player.play();
-                status.setText("Playing from Telegram command.");
-            });
-            return;
-        }
-
-        String fileId = findPlayableTelegramFileId(message);
-        if (!fileId.isEmpty()) {
-            playUrl(resolveTelegramFileUrl(token, fileId));
-        } else if (!text.isEmpty()) {
-            showStatus("No playable URL or Telegram video file found in the latest message.");
-        }
-    }
-
-    private String findPlayableTelegramFileId(JSONObject message) {
-        JSONObject video = message.optJSONObject("video");
-        if (video != null) {
-            return video.optString("file_id", "");
-        }
-        JSONObject document = message.optJSONObject("document");
-        if (document != null) {
-            String mimeType = document.optString("mime_type", "");
-            if (mimeType.startsWith("video/")) {
-                return document.optString("file_id", "");
+            } catch (Exception e) {
+                showStatus(getString(R.string.status_reconnecting), DOT_WAITING);
+                sleep(3000);
             }
         }
-        JSONObject animation = message.optJSONObject("animation");
-        if (animation != null) {
-            return animation.optString("file_id", "");
-        }
-        return "";
     }
 
-    private String resolveTelegramFileUrl(String token, String fileId) throws Exception {
-        String json = get("https://api.telegram.org/bot" + token + "/getFile?file_id=" + fileId);
-        JSONObject response = new JSONObject(json);
-        if (!response.optBoolean("ok")) {
-            throw new IllegalStateException(response.optString("description", "Unable to resolve Telegram file"));
+    private boolean register() {
+        showStatus(getString(R.string.status_connecting), DOT_WAITING);
+        try {
+            String body = httpPost(SERVER_URL + "/api/register");
+            JSONObject json = new JSONObject(body);
+            deviceId = json.getString("deviceId");
+            final String code = json.getString("code");
+            botUsername = json.optString("botUsername", "");
+            handler.post(() -> {
+                codeView.setText(code);
+                pairHint.setText(botUsername.isEmpty()
+                        ? getString(R.string.pair_hint_open_generic)
+                        : getString(R.string.pair_hint_open_named, botUsername));
+                renderQr(code);
+                setStatus(getString(R.string.status_waiting_pairing), DOT_WAITING);
+            });
+            return true;
+        } catch (Exception e) {
+            showStatus(getString(R.string.status_cant_reach), DOT_ERROR);
+            return false;
         }
-        String filePath = response.getJSONObject("result").getString("file_path");
-        return "https://api.telegram.org/file/bot" + token + "/" + filePath;
     }
 
-    private void playUrl(String mediaUrl) {
+    private void handleCommand(JSONObject command) {
+        String type = command.optString("type", "");
+        switch (type) {
+            case "play":
+                final String url = command.optString("url", "");
+                final String label = command.optString("label", url);
+                if (!url.isEmpty()) {
+                    handler.post(() -> {
+                        nowPlaying.setText(getString(R.string.now_playing_fmt, label));
+                        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
+                        player.prepare();
+                        player.setPlayWhenReady(true);
+                        showPlayer();
+                    });
+                }
+                break;
+            case "pause":
+                handler.post(() -> player.pause());
+                break;
+            case "resume":
+                handler.post(() -> player.play());
+                break;
+            case "stop":
+                handler.post(() -> {
+                    player.stop();
+                    player.clearMediaItems();
+                    showSetup(getString(R.string.status_stopped_telegram));
+                });
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void renderQr(String code) {
+        if (botUsername.isEmpty()) {
+            qrView.setVisibility(View.INVISIBLE);
+            return;
+        }
+        String deepLink = "https://t.me/" + botUsername + "?start=" + code;
+        try {
+            int size = dp(190);
+            QRCodeWriter writer = new QRCodeWriter();
+            Map<EncodeHintType, Object> hints = new HashMap<>();
+            hints.put(EncodeHintType.MARGIN, 1);
+            BitMatrix matrix = writer.encode(deepLink, BarcodeFormat.QR_CODE, size, size, hints);
+            Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            for (int x = 0; x < size; x++) {
+                for (int y = 0; y < size; y++) {
+                    bitmap.setPixel(x, y, matrix.get(x, y) ? Color.BLACK : Color.WHITE);
+                }
+            }
+            qrView.setImageBitmap(bitmap);
+            qrView.setVisibility(View.VISIBLE);
+        } catch (Exception e) {
+            qrView.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    // ---------------------------------------------------------------- view switching
+
+    private void showSetup(String message) {
         handler.post(() -> {
-            status.setText("Casting from Telegram.");
-            nowPlaying.setText(safeMediaLabel(mediaUrl));
-            player.setMediaItem(MediaItem.fromUri(Uri.parse(mediaUrl)));
-            player.prepare();
-            player.setPlayWhenReady(true);
+            playerContainer.setVisibility(View.GONE);
+            setupView.setVisibility(View.VISIBLE);
+            nowPlaying.setText(R.string.now_playing_none);
+            if (message != null) setStatus(message, paired ? DOT_LIVE : DOT_WAITING);
         });
     }
 
-    private String safeMediaLabel(String mediaUrl) {
-        String token = tokenInput.getText().toString().trim();
-        if (!token.isEmpty()) {
-            return mediaUrl.replace(token, TOKEN_MASK);
-        }
-        return mediaUrl;
+    private void showPlayer() {
+        handler.post(() -> {
+            setupView.setVisibility(View.GONE);
+            playerContainer.setVisibility(View.VISIBLE);
+            playerView.requestFocus();
+        });
     }
 
     private void togglePlayback() {
         if (player.isPlaying()) {
             player.pause();
-            status.setText("Paused.");
         } else {
             player.play();
-            status.setText("Playing.");
         }
     }
 
-    private void showStatus(String message) {
-        handler.post(() -> status.setText(message));
+    // ---------------------------------------------------------------- helpers
+
+    private void setStatus(String message, int dotColor) {
+        if (status != null) status.setText(message);
+        if (statusDot != null && statusDot.getBackground() != null) {
+            statusDot.getBackground().setTint(dotColor);
+        }
     }
 
-    private void showChatHelp(String message) {
-        handler.post(() -> chatHelp.setText(message));
+    private void showStatus(String message, int dotColor) {
+        handler.post(() -> setStatus(message, dotColor));
     }
 
-    private String get(String endpoint) throws Exception {
+    private void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private String httpGet(String endpoint, int readTimeout) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
         connection.setConnectTimeout(8000);
-        connection.setReadTimeout(8000);
+        connection.setReadTimeout(readTimeout);
         connection.setRequestMethod("GET");
+        return readBody(connection);
+    }
+
+    private String httpPost(String endpoint) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        connection.setConnectTimeout(8000);
+        connection.setReadTimeout(10000);
+        connection.setRequestMethod("POST");
+        connection.setDoOutput(true);
+        connection.getOutputStream().close();
+        return readBody(connection);
+    }
+
+    private String readBody(HttpURLConnection connection) throws Exception {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
             StringBuilder body = new StringBuilder();
             String line;

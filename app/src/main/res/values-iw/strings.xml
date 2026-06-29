@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Telegram TV Cast</string>
+    <string name="brand_title">Telegram\nל-TV</string>
+    <string name="brand_subtitle">בלי הגדרות, בלי חשבון. מצמידים פעם אחת, ואז שולחים כל סרטון לבוט — והוא מתנגן כאן.</string>
+
+    <string name="pair_header">צימוד הטלוויזיה</string>
+    <string name="step_1">פותחים את טלגרם ומחפשים את הבוט</string>
+    <string name="step_2">שולחים לו את הקוד שלמטה (או סורקים)</string>
+    <string name="step_3">ואז שולחים קישור וידאו או קובץ</string>
+    <string name="code_label">קוד הצימוד שלך</string>
+    <string name="scan_label">סרקו כדי לפתוח את הבוט</string>
+
+    <string name="status_starting">מתחיל…</string>
+    <string name="status_connecting">מתחבר לשירות השידור…</string>
+    <string name="status_cant_reach">לא ניתן להגיע לשירות השידור. מנסה שוב…</string>
+    <string name="status_reconnecting">מתחבר מחדש לשירות השידור…</string>
+    <string name="status_waiting_pairing">ממתין לצימוד…</string>
+    <string name="status_paired">צומד! שלחו סרטון לבוט כדי להתחיל לשדר.</string>
+    <string name="status_complete">ההשמעה הסתיימה. שלחו סרטון נוסף כדי לשדר שוב.</string>
+    <string name="status_error_play">לא ניתן לנגן את המדיה הזו. נסו סרטון אחר או קישור ישיר.</string>
+    <string name="status_stopped">הופסק. שלחו סרטון נוסף לבוט כדי לשדר שוב.</string>
+    <string name="status_stopped_telegram">הופסק מטלגרם.</string>
+    <string name="status_not_configured">האפליקציה לא הוגדרה עם כתובת שרת. הגדירו את server.url ובנו מחדש.</string>
+
+    <string name="pair_hint_open_named">פתחו את ‎@%1$s בטלגרם ושלחו את הקוד הזה.</string>
+    <string name="pair_hint_open_generic">פתחו את בוט השידור בטלגרם ושלחו את הקוד הזה.</string>
+    <string name="pair_hint_paired">צומד ✓  שלחו סרטון אל ‎@%1$s בטלגרם.</string>
+
+    <string name="now_playing_none">לא מתנגן וידאו.</string>
+    <string name="now_playing_fmt">מתנגן כעת: %1$s</string>
+</resources>
