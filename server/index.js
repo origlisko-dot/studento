@@ -19,7 +19,7 @@ const { Readable } = require('stream');
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const BOT_USERNAME = process.env.BOT_USERNAME || '';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'changeme';
-const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const PAIR_TTL_MS = 15 * 60 * 1000; // unpaired codes expire after 15 min
 const POLL_TIMEOUT_MS = 25 * 1000;
@@ -244,10 +244,26 @@ setInterval(() => {
   }
 }, 60 * 1000).unref();
 
+async function autoRegisterWebhook() {
+  if (!BOT_TOKEN || !PUBLIC_URL) return;
+  try {
+    const url = `${PUBLIC_URL}/telegram/webhook/${WEBHOOK_SECRET}`;
+    const result = await tg('setWebhook', {
+      url,
+      secret_token: WEBHOOK_SECRET,
+      allowed_updates: ['message', 'channel_post'],
+    });
+    console.log(`setWebhook -> ${url}: ${result.ok ? 'ok' : JSON.stringify(result)}`);
+  } catch (e) {
+    console.warn('setWebhook failed:', e.message);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`telegram-tv-cast server listening on :${PORT}`);
   if (!BOT_TOKEN) console.warn('WARNING: BOT_TOKEN is not set');
   if (!PUBLIC_URL) console.warn('WARNING: PUBLIC_URL is not set (media proxy URLs will be relative)');
+  autoRegisterWebhook();
 });
 
 module.exports = app;

@@ -2,16 +2,21 @@
 
 End-to-end steps to publish Telegram TV Cast to Google Play.
 
-## 1. Create the public bot (once)
+## 1. Public bot (done)
 
-1. In Telegram, talk to **@BotFather** → `/newbot` → choose a name and @username.
-2. Copy the bot token. This goes on the **server only** (never in the app).
+The public bot is **@TV_TO_TELEGRAMbot** (display name TV_GRAM). Keep its token
+private — it goes on the **server only**, never in the app. To rotate it, use
+`/revoke` in @BotFather and update `BOT_TOKEN` on the server.
 
 ## 2. Deploy the backend
 
-See `server/README.md`. Set `BOT_TOKEN`, `BOT_USERNAME`, `WEBHOOK_SECRET`,
-`PUBLIC_URL`, deploy, then `npm run set-webhook`. Verify `GET /` returns
-`{"ok":true}` and that messaging the bot a code pairs a running TV app.
+Easiest path — **Render Blueprint** (see `server/README.md`): New → Blueprint →
+pick this repo → set `BOT_TOKEN` → Deploy. `BOT_USERNAME=TV_TO_TELEGRAMbot` is
+prefilled, `WEBHOOK_SECRET` is auto-generated, `PUBLIC_URL` is auto-detected, and
+the webhook registers itself on startup.
+
+Verify `GET /` returns `{"ok":true}`, then message the bot the code shown on a
+running TV to confirm pairing. Copy the deployed URL into the app's `server.url`.
 
 ## 3. Create your upload keystore (once)
 

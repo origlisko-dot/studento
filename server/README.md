@@ -54,16 +54,25 @@ npm run set-webhook
 
 ## Deploy
 
-Any Node 18+ host works (Render, Railway, Fly.io, a VPS, etc.). A `Dockerfile`
-is included:
+### One-click (Render Blueprint) — recommended
+
+The repo ships a root `render.yaml`. In Render: **New → Blueprint**, pick the
+repo, set `BOT_TOKEN` (the only secret; `BOT_USERNAME` is prefilled to
+`TV_TO_TELEGRAMbot` and `WEBHOOK_SECRET` is auto-generated), and deploy.
+
+`PUBLIC_URL` is auto-detected from `RENDER_EXTERNAL_URL`, and the Telegram
+webhook is **registered automatically on startup** — no manual `set-webhook`
+step. Once live, copy the service URL into the app's `server.url` and rebuild.
+
+### Docker / any Node 18+ host
 
 ```bash
 docker build -t tg-tv-cast-server .
 docker run -p 8080:8080 --env-file .env tg-tv-cast-server
 ```
 
-After deploying, point the Android app at this server via `server.url` in the
-app's `local.properties` and rebuild.
+On startup the server auto-registers the webhook when `BOT_TOKEN` and
+`PUBLIC_URL` are set; otherwise run `npm run set-webhook` once.
 
 ## Scaling notes
 
