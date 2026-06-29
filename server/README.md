@@ -64,6 +64,14 @@ repo, set `BOT_TOKEN` (the only secret; `BOT_USERNAME` is prefilled to
 webhook is **registered automatically on startup** — no manual `set-webhook`
 step. Once live, copy the service URL into the app's `server.url` and rebuild.
 
+### Railway
+
+New Project → Deploy from GitHub repo → set the service **Root Directory** to
+`server`. Add a variable `BOT_TOKEN` (your bot token) and `BOT_USERNAME=
+TV_TO_TELEGRAMbot`. Under Settings → Networking, **Generate Domain**. The server
+reads `RAILWAY_PUBLIC_DOMAIN` for `PUBLIC_URL` and registers the webhook on
+startup (redeploy once after generating the domain so it picks it up).
+
 ### Docker / any Node 18+ host
 
 ```bash

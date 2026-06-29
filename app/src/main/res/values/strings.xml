@@ -1,3 +1,31 @@
 <resources>
     <string name="app_name">Telegram TV Cast</string>
+    <string name="brand_title">Telegram\nTV Cast</string>
+    <string name="brand_subtitle">No setup, no account. Pair once, then send any video to the bot — it plays here.</string>
+
+    <string name="pair_header">Pair your TV</string>
+    <string name="step_1">Open Telegram and find the bot</string>
+    <string name="step_2">Send it the code below (or scan)</string>
+    <string name="step_3">Then send any video link or file</string>
+    <string name="code_label">Your pairing code</string>
+    <string name="scan_label">Scan to open the bot</string>
+
+    <string name="status_starting">Starting…</string>
+    <string name="status_connecting">Connecting to the casting service…</string>
+    <string name="status_cant_reach">Can\'t reach the casting service. Retrying…</string>
+    <string name="status_reconnecting">Reconnecting to the casting service…</string>
+    <string name="status_waiting_pairing">Waiting for pairing…</string>
+    <string name="status_paired">Paired! Send a video to the bot to start casting.</string>
+    <string name="status_complete">Playback complete. Send another video to cast again.</string>
+    <string name="status_error_play">Unable to play this media. Try a different video or a direct link.</string>
+    <string name="status_stopped">Stopped. Send another video to your bot to cast again.</string>
+    <string name="status_stopped_telegram">Stopped from Telegram.</string>
+    <string name="status_not_configured">App is not configured with a server URL. Set server.url and rebuild.</string>
+
+    <string name="pair_hint_open_named">Open @%1$s in Telegram and send this code.</string>
+    <string name="pair_hint_open_generic">Open your casting bot in Telegram and send this code.</string>
+    <string name="pair_hint_paired">Paired ✓  Send a video to @%1$s in Telegram.</string>
+
+    <string name="now_playing_none">No video playing.</string>
+    <string name="now_playing_fmt">Now playing: %1$s</string>
 </resources>

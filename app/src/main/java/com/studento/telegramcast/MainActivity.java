@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         buildUi();
         if (SERVER_URL.isEmpty()) {
-            setStatus("App is not configured with a server URL. Set server.url and rebuild.", DOT_ERROR);
+            setStatus(getString(R.string.status_not_configured), DOT_ERROR);
             return;
         }
         running = true;
@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
                 player.stop();
                 player.clearMediaItems();
             }
-            showSetup("Stopped. Send another video to your bot to cast again.");
+            showSetup(getString(R.string.status_stopped));
             return true;
         }
         return super.dispatchKeyEvent(event);
@@ -135,13 +135,13 @@ public class MainActivity extends Activity {
             @Override
             public void onPlaybackStateChanged(int playbackState) {
                 if (playbackState == Player.STATE_ENDED) {
-                    showSetup("Playback complete. Send another video to cast again.");
+                    showSetup(getString(R.string.status_complete));
                 }
             }
 
             @Override
             public void onPlayerError(PlaybackException error) {
-                showSetup("Unable to play this media. Try a different video or a direct link.");
+                showSetup(getString(R.string.status_error_play));
             }
         });
 
@@ -151,7 +151,7 @@ public class MainActivity extends Activity {
         playerContainer.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
 
         nowPlaying = new TextView(this);
-        nowPlaying.setText("No video playing.");
+        nowPlaying.setText(R.string.now_playing_none);
         nowPlaying.setTextColor(COLOR_TEXT);
         nowPlaying.setTextSize(16);
         nowPlaying.setShadowLayer(8f, 0f, 2f, 0xCC000000);
@@ -192,7 +192,7 @@ public class MainActivity extends Activity {
         brand.addView(logo, new LinearLayout.LayoutParams(dp(112), dp(112)));
 
         TextView title = new TextView(this);
-        title.setText("Telegram\nTV Cast");
+        title.setText(R.string.brand_title);
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(46);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -202,7 +202,7 @@ public class MainActivity extends Activity {
         brand.addView(title, titleParams);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("No setup, no account. Pair once, then send any video to the bot — it plays here.");
+        subtitle.setText(R.string.brand_subtitle);
         subtitle.setTextColor(COLOR_MUTED);
         subtitle.setTextSize(18);
         LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(-2, -2);
@@ -219,7 +219,7 @@ public class MainActivity extends Activity {
         card.setPadding(dp(44), dp(40), dp(44), dp(40));
 
         TextView header = new TextView(this);
-        header.setText("Pair your TV");
+        header.setText(R.string.pair_header);
         header.setTextColor(COLOR_TEXT);
         header.setTextSize(28);
         header.setTypeface(Typeface.DEFAULT_BOLD);
@@ -231,17 +231,16 @@ public class MainActivity extends Activity {
         bodyParams.topMargin = dp(20);
         card.addView(body, bodyParams);
 
-        // left: steps + code
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
         body.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        left.addView(buildStep(1, "Open Telegram and find the bot"), stepParams());
-        left.addView(buildStep(2, "Send it the code below (or scan)"), stepParams());
-        left.addView(buildStep(3, "Then send any video link or file"), stepParams());
+        left.addView(buildStep(1, getString(R.string.step_1)), stepParams());
+        left.addView(buildStep(2, getString(R.string.step_2)), stepParams());
+        left.addView(buildStep(3, getString(R.string.step_3)), stepParams());
 
         TextView codeLabel = new TextView(this);
-        codeLabel.setText("Your pairing code");
+        codeLabel.setText(R.string.code_label);
         codeLabel.setTextColor(0xFF8FA7B5);
         codeLabel.setTextSize(16);
         LinearLayout.LayoutParams codeLabelParams = new LinearLayout.LayoutParams(-2, -2);
@@ -260,14 +259,13 @@ public class MainActivity extends Activity {
         left.addView(codeView, new LinearLayout.LayoutParams(-2, -2));
 
         pairHint = new TextView(this);
-        pairHint.setText("Connecting to the casting service...");
+        pairHint.setText(R.string.status_connecting);
         pairHint.setTextColor(COLOR_MUTED);
         pairHint.setTextSize(16);
         LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-2, -2);
         hintParams.topMargin = dp(14);
         left.addView(pairHint, hintParams);
 
-        // right: QR
         LinearLayout right = new LinearLayout(this);
         right.setOrientation(LinearLayout.VERTICAL);
         right.setGravity(Gravity.CENTER);
@@ -282,7 +280,7 @@ public class MainActivity extends Activity {
         right.addView(qrView, new LinearLayout.LayoutParams(dp(190), dp(190)));
 
         TextView scanLabel = new TextView(this);
-        scanLabel.setText("Scan to open the bot");
+        scanLabel.setText(R.string.scan_label);
         scanLabel.setTextColor(COLOR_MUTED);
         scanLabel.setTextSize(14);
         scanLabel.setGravity(Gravity.CENTER);
@@ -311,7 +309,7 @@ public class MainActivity extends Activity {
         statusRow.addView(statusDot, dotParams);
 
         status = new TextView(this);
-        status.setText("Starting...");
+        status.setText(R.string.status_starting);
         status.setTextColor(0xFFCBE0EC);
         status.setTextSize(18);
         statusRow.addView(status, new LinearLayout.LayoutParams(-2, -2));
@@ -361,22 +359,22 @@ public class MainActivity extends Activity {
                 boolean nowPaired = json.optBoolean("paired");
                 if (nowPaired && !paired) {
                     paired = true;
-                    showStatus("Paired! Send a video to the bot to start casting.", DOT_LIVE);
-                    handler.post(() -> pairHint.setText("Paired ✓  Send a video to @" + botUsername + " in Telegram."));
+                    showStatus(getString(R.string.status_paired), DOT_LIVE);
+                    handler.post(() -> pairHint.setText(getString(R.string.pair_hint_paired, botUsername)));
                 }
                 JSONObject command = json.optJSONObject("command");
                 if (command != null) {
                     handleCommand(command);
                 }
             } catch (Exception e) {
-                showStatus("Reconnecting to the casting service...", DOT_WAITING);
+                showStatus(getString(R.string.status_reconnecting), DOT_WAITING);
                 sleep(3000);
             }
         }
     }
 
     private boolean register() {
-        showStatus("Connecting to the casting service...", DOT_WAITING);
+        showStatus(getString(R.string.status_connecting), DOT_WAITING);
         try {
             String body = httpPost(SERVER_URL + "/api/register");
             JSONObject json = new JSONObject(body);
@@ -385,16 +383,15 @@ public class MainActivity extends Activity {
             botUsername = json.optString("botUsername", "");
             handler.post(() -> {
                 codeView.setText(code);
-                String hint = botUsername.isEmpty()
-                        ? "Open your casting bot in Telegram and send this code."
-                        : "Open @" + botUsername + " in Telegram and send this code.";
-                pairHint.setText(hint);
+                pairHint.setText(botUsername.isEmpty()
+                        ? getString(R.string.pair_hint_open_generic)
+                        : getString(R.string.pair_hint_open_named, botUsername));
                 renderQr(code);
-                setStatus("Waiting for pairing...", DOT_WAITING);
+                setStatus(getString(R.string.status_waiting_pairing), DOT_WAITING);
             });
             return true;
         } catch (Exception e) {
-            showStatus("Can't reach the casting service. Retrying...", DOT_ERROR);
+            showStatus(getString(R.string.status_cant_reach), DOT_ERROR);
             return false;
         }
     }
@@ -407,7 +404,7 @@ public class MainActivity extends Activity {
                 final String label = command.optString("label", url);
                 if (!url.isEmpty()) {
                     handler.post(() -> {
-                        nowPlaying.setText("Now playing: " + label);
+                        nowPlaying.setText(getString(R.string.now_playing_fmt, label));
                         player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
                         player.prepare();
                         player.setPlayWhenReady(true);
@@ -425,7 +422,7 @@ public class MainActivity extends Activity {
                 handler.post(() -> {
                     player.stop();
                     player.clearMediaItems();
-                    showSetup("Stopped from Telegram.");
+                    showSetup(getString(R.string.status_stopped_telegram));
                 });
                 break;
             default:
@@ -464,7 +461,7 @@ public class MainActivity extends Activity {
         handler.post(() -> {
             playerContainer.setVisibility(View.GONE);
             setupView.setVisibility(View.VISIBLE);
-            nowPlaying.setText("No video playing.");
+            nowPlaying.setText(R.string.now_playing_none);
             if (message != null) setStatus(message, paired ? DOT_LIVE : DOT_WAITING);
         });
     }
