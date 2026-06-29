@@ -14,6 +14,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const path = require('path');
 const { Readable } = require('stream');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
@@ -87,6 +88,14 @@ function notifyPaired(deviceId) {
 
 // ---- health ----
 app.get('/', (_req, res) => res.json({ ok: true, service: 'telegram-tv-cast' }));
+
+// ---- APK download (for sideloading on a TV via the Downloader app) ----
+app.get(['/app', '/app.apk'], (_req, res) => {
+  res.setHeader('Content-Disposition', 'attachment; filename="telegram-tv-cast.apk"');
+  res.sendFile(path.join(__dirname, 'public', 'telegram-tv-cast.apk'), (err) => {
+    if (err && !res.headersSent) res.status(404).send('APK not found');
+  });
+});
 
 // ---- TV: register a device, get a pairing code ----
 app.post('/api/register', (_req, res) => {
