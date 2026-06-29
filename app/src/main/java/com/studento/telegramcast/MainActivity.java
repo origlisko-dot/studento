@@ -33,11 +33,13 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     private static final String PREFS = "telegram_tv_cast";
     private static final String TOKEN = "bot_token";
+    private static final String DEFAULT_BOT_TOKEN = "8896570413:AAGpe2mcv5on3g3MnS0YrSm2AVv4vYqGStw";
     private static final String CHAT_ID = "chat_id";
     private static final String LAST_UPDATE_ID = "last_update_id";
     private static final long POLL_INTERVAL_MS = 3000L;
-    private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
+    private static final Pattern URL_PATTERN = Pattern.compile("https?://[^\\s)\\]}>\\\"]+");
     private static final Pattern TOKEN_PATTERN = Pattern.compile("\\d{6,}:[-_A-Za-z0-9]{20,}");
+    private static final String TOKEN_MASK = "<bot-token>";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private VideoView videoView;
@@ -69,11 +71,11 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         buildUi();
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        tokenInput.setText(prefs.getString(TOKEN, ""));
+        tokenInput.setText(prefs.getString(TOKEN, DEFAULT_BOT_TOKEN));
         chatInput.setText(prefs.getString(CHAT_ID, ""));
         lastUpdateId = prefs.getInt(LAST_UPDATE_ID, 0);
         if (tokenInput.getText().length() > 0) {
-            status.setText("Saved bot token found. Press Connect to start casting.");
+            status.setText("Bot token loaded. Press Connect to start casting.");
         }
     }
 
@@ -357,7 +359,7 @@ public class MainActivity extends Activity {
     private void playUrl(String mediaUrl) {
         handler.post(() -> {
             status.setText("Casting from Telegram.");
-            nowPlaying.setText(mediaUrl);
+            nowPlaying.setText(safeMediaLabel(mediaUrl));
             videoView.setVideoURI(Uri.parse(mediaUrl));
             videoView.setOnPreparedListener((MediaPlayer player) -> {
                 player.setLooping(false);
@@ -370,6 +372,14 @@ public class MainActivity extends Activity {
                 return true;
             });
         });
+    }
+
+    private String safeMediaLabel(String mediaUrl) {
+        String token = tokenInput.getText().toString().trim();
+        if (!token.isEmpty()) {
+            return mediaUrl.replace(token, TOKEN_MASK);
+        }
+        return mediaUrl;
     }
 
     private void togglePlayback() {

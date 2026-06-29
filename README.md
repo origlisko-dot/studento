@@ -20,7 +20,7 @@ Telegram TV Cast is an Android TV app scaffolded for Google Play distribution. I
 
 ## When the bot API token is needed
 
-The codebase does not need your bot API token to build the app. The token is only required when you run the app on a TV or emulator and press **Connect**. Paste the token from BotFather into the app at that point.
+This prototype currently includes a prefilled bot token so the TV app can connect without typing it on the remote. For any real release, remove the default token, do not commit real bot tokens to source control, and rotate the bot in BotFather if the token was shared publicly.
 
 ## Google Play readiness notes
 
