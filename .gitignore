@@ -8,3 +8,6 @@ keystore.properties
 *.keystore
 *.jks
 scratch/
+server/node_modules/
+server/.env
+server/package-lock.json
