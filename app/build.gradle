@@ -1,8 +1,24 @@
 plugins { id 'com.android.application' }
 
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+def localPropertiesFile = rootProject.file('local.properties')
+def localProperties = new Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
+}
+
 android {
     namespace 'com.studento.telegramcast'
     compileSdk 35
+
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
         applicationId 'com.studento.telegramcast'
@@ -10,5 +26,46 @@ android {
         targetSdk 35
         versionCode 1
         versionName '1.0.0'
+
+        // Optional convenience: a default bot token can be supplied via
+        // local.properties (telegram.bot.token=...) or the TELEGRAM_BOT_TOKEN
+        // env var. It is NOT committed; the field is empty in a clean checkout.
+        def defaultBotToken = localProperties.getProperty('telegram.bot.token') ?: (System.getenv('TELEGRAM_BOT_TOKEN') ?: '')
+        buildConfigField "String", "DEFAULT_BOT_TOKEN", "\"${defaultBotToken}\""
     }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    signingConfigs {
+        release {
+            def storePath = keystoreProperties.getProperty('storeFile') ?: System.getenv('RELEASE_STORE_FILE')
+            if (storePath) {
+                storeFile rootProject.file(storePath)
+                storePassword keystoreProperties.getProperty('storePassword') ?: System.getenv('RELEASE_STORE_PASSWORD')
+                keyAlias keystoreProperties.getProperty('keyAlias') ?: System.getenv('RELEASE_KEY_ALIAS')
+                keyPassword keystoreProperties.getProperty('keyPassword') ?: System.getenv('RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Use the release signing config only when a keystore is configured,
+            // otherwise Gradle produces an unsigned release APK.
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    def media3Version = '1.4.1'
+    implementation "androidx.media3:media3-exoplayer:$media3Version"
+    implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
+    implementation "androidx.media3:media3-ui:$media3Version"
 }

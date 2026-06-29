@@ -4,3 +4,6 @@ app/build/
 local.properties
 *.iml
 .DS_Store
+keystore.properties
+*.keystore
+*.jks
