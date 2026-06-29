@@ -2,7 +2,6 @@ package com.studento.telegramcast;
 
 import android.app.Activity;
 import android.content.SharedPreferences;
-import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,7 +16,12 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.VideoView;
+
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.ui.PlayerView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -33,7 +37,7 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     private static final String PREFS = "telegram_tv_cast";
     private static final String TOKEN = "bot_token";
-    private static final String DEFAULT_BOT_TOKEN = "8896570413:AAGpe2mcv5on3g3MnS0YrSm2AVv4vYqGStw";
+    private static final String DEFAULT_BOT_TOKEN = BuildConfig.DEFAULT_BOT_TOKEN;
     private static final String CHAT_ID = "chat_id";
     private static final String LAST_UPDATE_ID = "last_update_id";
     private static final long POLL_INTERVAL_MS = 3000L;
@@ -42,7 +46,8 @@ public class MainActivity extends Activity {
     private static final String TOKEN_MASK = "<bot-token>";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private VideoView videoView;
+    private PlayerView playerView;
+    private ExoPlayer player;
     private EditText tokenInput;
     private EditText chatInput;
     private TextView status;
@@ -83,24 +88,34 @@ public class MainActivity extends Activity {
     protected void onStop() {
         super.onStop();
         stopPolling();
-        if (videoView != null && videoView.isPlaying()) {
-            videoView.pause();
+        if (player != null && player.isPlaying()) {
+            player.pause();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (player != null) {
+            player.release();
+            player = null;
         }
     }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (event.getAction() != KeyEvent.ACTION_UP || videoView == null) {
+        if (event.getAction() != KeyEvent.ACTION_UP || player == null) {
             return super.dispatchKeyEvent(event);
         }
         int keyCode = event.getKeyCode();
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
             togglePlayback();
             return true;
         }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_STOP || keyCode == KeyEvent.KEYCODE_BACK) {
-            if (videoView.isPlaying()) {
-                videoView.stopPlayback();
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_STOP) {
+            if (player.getPlaybackState() != Player.STATE_IDLE) {
+                player.stop();
+                player.clearMediaItems();
                 nowPlaying.setText("No video playing.");
                 status.setText("Playback stopped.");
                 return true;
@@ -185,8 +200,29 @@ public class MainActivity extends Activity {
         nowPlaying.setGravity(Gravity.CENTER);
         root.addView(nowPlaying, new LinearLayout.LayoutParams(-1, -2));
 
-        videoView = new VideoView(this);
-        root.addView(videoView, new LinearLayout.LayoutParams(-1, 0, 1));
+        player = new ExoPlayer.Builder(this).build();
+        player.addListener(new Player.Listener() {
+            @Override
+            public void onPlaybackStateChanged(int playbackState) {
+                if (playbackState == Player.STATE_BUFFERING) {
+                    status.setText("Buffering...");
+                } else if (playbackState == Player.STATE_READY) {
+                    status.setText("Playing. Use TV OK/play-pause or Telegram commands to control playback.");
+                } else if (playbackState == Player.STATE_ENDED) {
+                    status.setText("Playback complete. Send another video to cast again.");
+                }
+            }
+
+            @Override
+            public void onPlayerError(PlaybackException error) {
+                status.setText("Unable to play this media. Send a direct MP4/HLS URL or a Telegram video file.");
+            }
+        });
+
+        playerView = new PlayerView(this);
+        playerView.setPlayer(player);
+        playerView.setUseController(true);
+        root.addView(playerView, new LinearLayout.LayoutParams(-1, 0, 1));
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
@@ -289,8 +325,8 @@ public class MainActivity extends Activity {
         String command = text.toLowerCase(Locale.US);
         if (command.startsWith("/pause")) {
             handler.post(() -> {
-                if (videoView.isPlaying()) {
-                    videoView.pause();
+                if (player.isPlaying()) {
+                    player.pause();
                 }
                 status.setText("Paused from Telegram.");
             });
@@ -298,7 +334,8 @@ public class MainActivity extends Activity {
         }
         if (command.startsWith("/stop")) {
             handler.post(() -> {
-                videoView.stopPlayback();
+                player.stop();
+                player.clearMediaItems();
                 nowPlaying.setText("No video playing.");
                 status.setText("Stopped from Telegram.");
             });
@@ -313,7 +350,7 @@ public class MainActivity extends Activity {
 
         if (command.startsWith("/resume") || command.equals("/play")) {
             handler.post(() -> {
-                videoView.start();
+                player.play();
                 status.setText("Playing from Telegram command.");
             });
             return;
@@ -360,17 +397,9 @@ public class MainActivity extends Activity {
         handler.post(() -> {
             status.setText("Casting from Telegram.");
             nowPlaying.setText(safeMediaLabel(mediaUrl));
-            videoView.setVideoURI(Uri.parse(mediaUrl));
-            videoView.setOnPreparedListener((MediaPlayer player) -> {
-                player.setLooping(false);
-                videoView.start();
-                status.setText("Playing. Use TV OK/play-pause or Telegram commands to control playback.");
-            });
-            videoView.setOnCompletionListener(player -> status.setText("Playback complete. Send another video to cast again."));
-            videoView.setOnErrorListener((player, what, extra) -> {
-                status.setText("Unable to play this media. Send a direct MP4/HLS URL or a Telegram video file.");
-                return true;
-            });
+            player.setMediaItem(MediaItem.fromUri(Uri.parse(mediaUrl)));
+            player.prepare();
+            player.setPlayWhenReady(true);
         });
     }
 
@@ -383,11 +412,11 @@ public class MainActivity extends Activity {
     }
 
     private void togglePlayback() {
-        if (videoView.isPlaying()) {
-            videoView.pause();
+        if (player.isPlaying()) {
+            player.pause();
             status.setText("Paused.");
         } else {
-            videoView.start();
+            player.play();
             status.setText("Playing.");
         }
     }
