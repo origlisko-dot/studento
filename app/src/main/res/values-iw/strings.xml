@@ -37,7 +37,7 @@
     <string name="premium_cta">שדרוג ל-Premium</string>
     <string name="premium_coming_soon">Premium בקרוב!</string>
 
-    <string name="new_code_action">↻ קבלת קוד חדש</string>
+    <string name="new_code_action">קבלת קוד חדש</string>
     <string name="status_generating_code">יוצר קוד חדש…</string>
 
     <string name="queue_next_fmt">בתור: %1$s</string>

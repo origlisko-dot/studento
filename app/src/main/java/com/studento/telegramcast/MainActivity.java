@@ -491,6 +491,9 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, R.string.premium_coming_soon, Toast.LENGTH_SHORT).show());
         LinearLayout.LayoutParams ctaParams = new LinearLayout.LayoutParams(-2, -2);
         ctaParams.topMargin = dp(gapSm);
+        // Extra cushion below the last element: real TVs vary in how much
+        // they crop at the bottom edge regardless of our overscan padding.
+        ctaParams.bottomMargin = dp(gapMd);
         card.addView(premiumCta, ctaParams);
 
         return card;
