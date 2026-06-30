@@ -61,8 +61,9 @@ server.url=https://your-server.example.com
 2. Upload `app-release.aab` to Internal testing.
 3. Fill store listing from `docs/STORE_LISTING.md` and upload graphics from
    `docs/play/`.
-4. Add the privacy policy URL (host `PRIVACY.md`), complete Data safety and
-   content rating.
+4. Add the privacy policy URL — it's already live at
+   `https://<your-server>/privacy` (served from `server/PRIVACY.md`, no
+   separate hosting needed). Complete Data safety and content rating.
 5. Test on a real Android TV, then promote to Production.
 
 ## Versioning

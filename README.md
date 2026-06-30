@@ -52,7 +52,7 @@ in the app.
 |------|------|
 | `app/` | Android TV app (Java, Media3 ExoPlayer, ZXing for the pairing QR) |
 | `server/` | Node/Express pairing + media-proxy backend for the public bot |
-| `PRIVACY.md` | Privacy policy (required for Google Play) |
+| `server/PRIVACY.md` | Privacy policy, served live at `/privacy` (required for Google Play) |
 | `docs/STORE_LISTING.md` | Google Play listing copy + submission checklist |
 
 ## Building the app
@@ -103,4 +103,4 @@ npm run set-webhook    # register the Telegram webhook (same env vars)
 - The app requests only `INTERNET`.
 - Vector launcher icon and gradient TV banner included.
 - The bot token is never in the app — it lives only on the server.
-- See `PRIVACY.md` and `docs/STORE_LISTING.md` before submitting.
+- Privacy policy is live at `https://<your-server>/privacy` — see `docs/STORE_LISTING.md` before submitting.

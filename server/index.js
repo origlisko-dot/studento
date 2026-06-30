@@ -128,7 +128,7 @@ function markdownToHtml(md) {
 }
 
 app.get('/privacy', (_req, res) => {
-  fs.readFile(path.join(__dirname, '..', 'PRIVACY.md'), 'utf8', (err, md) => {
+  fs.readFile(path.join(__dirname, 'PRIVACY.md'), 'utf8', (err, md) => {
     if (err) return res.status(404).send('Privacy policy not found');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(`<!doctype html><html><head><meta charset="utf-8">
