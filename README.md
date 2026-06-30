@@ -32,7 +32,19 @@ in the app.
 2. In Telegram, open the public bot (tap the QR or search its @username) and send
    the code (the QR deep link sends it for you via `/start`).
 3. Send the bot any direct video URL (MP4/HLS) or a video file — it plays on the
-   TV. Use `/pause`, `/resume`, `/stop` to control playback.
+   TV. Send more while one is playing and they queue up automatically (free:
+   up to 5 queued, unlimited on Premium). Use `/pause`, `/resume`, `/skip`,
+   `/clear`, `/stop` to control playback.
+
+## Features
+
+- **Free**: instant pairing (code or QR), direct link + Telegram file playback,
+  a play queue (up to 5 queued videos), the last 5 played videos with one-click
+  replay, full TV remote control (`/pause` `/resume` `/skip` `/clear` `/stop`).
+- **Premium** (scaffolded, billing not yet wired): unlimited queue, unlimited
+  history, and on-screen variable playback speed (tap the speed badge while
+  playing). The server's `/api/register` response carries a `premium` flag the
+  app reads to unlock these — see `server/index.js`.
 
 ## Repository layout
 

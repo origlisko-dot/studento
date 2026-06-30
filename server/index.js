@@ -194,11 +194,17 @@ app.post('/telegram/webhook/:secret', async (req, res) => {
       return void (pushCommand(deviceId, { type: 'resume' }), send(chatId, '▶️ Resumed.'));
     }
     if (lower.startsWith('/stop')) return void (pushCommand(deviceId, { type: 'stop' }), send(chatId, '⏹ Stopped.'));
+    if (lower.startsWith('/skip') || lower.startsWith('/next')) {
+      return void (pushCommand(deviceId, { type: 'skip' }), send(chatId, '⏭ Skipped to the next video in the queue.'));
+    }
+    if (lower.startsWith('/clear')) {
+      return void (pushCommand(deviceId, { type: 'clear' }), send(chatId, '🗑 Queue cleared.'));
+    }
 
     const urlMatch = text.match(/https?:\/\/[^\s)\]}>"]+/);
     if (urlMatch) {
       pushCommand(deviceId, { type: 'play', url: urlMatch[0], label: urlMatch[0] });
-      return void send(chatId, '📺 Casting your link to the TV.');
+      return void send(chatId, '📺 Casting your link to the TV. Send more to queue them up.');
     }
 
     const fileId = extractFileId(message);
@@ -207,13 +213,13 @@ app.post('/telegram/webhook/:secret', async (req, res) => {
         const url = await resolveMediaUrl(fileId);
         const label = (message.video && 'video') || (message.document && message.document.file_name) || 'video';
         pushCommand(deviceId, { type: 'play', url, label });
-        return void send(chatId, '📺 Casting your video to the TV.');
+        return void send(chatId, '📺 Casting your video to the TV. Send more to queue them up.');
       } catch (e) {
         return void send(chatId, 'Could not fetch that file from Telegram. Try a smaller file or a direct link.');
       }
     }
 
-    send(chatId, 'Send a video link or a video file, or use /pause, /resume, /stop.');
+    send(chatId, 'Send a video link or a video file, or use /pause, /resume, /skip, /clear, /stop.');
   } catch (_e) {
     // already acked; swallow
   }

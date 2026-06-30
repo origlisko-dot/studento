@@ -33,5 +33,15 @@
     <string name="history_empty">Videos you cast will appear here.</string>
     <string name="badge_pro">PRO</string>
     <string name="premium_history_locked">Unlimited history with Premium</string>
-    <string name="premium_perks">Premium (soon): unlimited history · playlists · 4K · no limits</string>
+    <string name="premium_perks">Premium (soon): unlimited history · unlimited queue · playback speed · no limits</string>
+    <string name="premium_cta">Unlock Premium</string>
+    <string name="premium_coming_soon">Premium is coming soon!</string>
+
+    <string name="new_code_action">↻ Get a new code</string>
+    <string name="status_generating_code">Generating a new code…</string>
+
+    <string name="queue_next_fmt">Up next: %1$s</string>
+    <string name="queue_more_fmt"> · +%1$d more</string>
+    <string name="queue_full_toast">Queue is full — Premium removes the limit</string>
+    <string name="premium_speed_locked">Playback speed is a Premium feature</string>
 </resources>

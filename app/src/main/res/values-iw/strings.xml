@@ -33,5 +33,15 @@
     <string name="history_empty">סרטונים ששידרת יופיעו כאן.</string>
     <string name="badge_pro">PRO</string>
     <string name="premium_history_locked">היסטוריה ללא הגבלה עם Premium</string>
-    <string name="premium_perks">Premium (בקרוב): היסטוריה ללא הגבלה · פלייליסטים · 4K · בלי הגבלות</string>
+    <string name="premium_perks">Premium (בקרוב): היסטוריה ללא הגבלה · תור ללא הגבלה · מהירות נגינה · בלי הגבלות</string>
+    <string name="premium_cta">שדרוג ל-Premium</string>
+    <string name="premium_coming_soon">Premium בקרוב!</string>
+
+    <string name="new_code_action">↻ קבלת קוד חדש</string>
+    <string name="status_generating_code">יוצר קוד חדש…</string>
+
+    <string name="queue_next_fmt">בתור: %1$s</string>
+    <string name="queue_more_fmt"> · ועוד %1$d</string>
+    <string name="queue_full_toast">התור מלא — Premium מסיר את ההגבלה</string>
+    <string name="premium_speed_locked">מהירות נגינה היא תכונת Premium</string>
 </resources>
