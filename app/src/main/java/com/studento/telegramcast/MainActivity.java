@@ -123,7 +123,7 @@ public class MainActivity extends Activity {
 
     private void buildUi() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundResource(R.drawable.bg_screen);
+        root.setBackgroundColor(0xFF0B1B28);
         root.addView(buildSetup(), new FrameLayout.LayoutParams(-1, -1));
 
         playerContainer = new FrameLayout(this);
@@ -163,72 +163,60 @@ public class MainActivity extends Activity {
     }
 
     private ScrollView buildSetup() {
-        LinearLayout columns = new LinearLayout(this);
-        columns.setOrientation(LinearLayout.HORIZONTAL);
-        columns.setPadding(dp(56), dp(48), dp(56), dp(48));
-        columns.addView(buildBrandPanel(), new LinearLayout.LayoutParams(dp(380), -1));
-
-        View spacer = new View(this);
-        columns.addView(spacer, new LinearLayout.LayoutParams(dp(48), 1));
-
-        columns.addView(buildCard(), new LinearLayout.LayoutParams(0, -2, 1f));
+        // Overscan-safe outer padding: TVs clip ~5% of every edge.
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setGravity(Gravity.CENTER);
+        outer.setPadding(dp(64), dp(40), dp(64), dp(40));
+        outer.addView(buildCard(), new LinearLayout.LayoutParams(-1, -2));
 
         setupView = new ScrollView(this);
         setupView.setFillViewport(true);
-        setupView.addView(columns, new ScrollView.LayoutParams(-1, -1));
+        setupView.addView(outer, new ScrollView.LayoutParams(-1, -1));
         return setupView;
-    }
-
-    private LinearLayout buildBrandPanel() {
-        LinearLayout brand = new LinearLayout(this);
-        brand.setOrientation(LinearLayout.VERTICAL);
-        brand.setGravity(Gravity.CENTER_VERTICAL);
-
-        FrameLayout logo = new FrameLayout(this);
-        logo.setBackgroundResource(R.drawable.bg_logo);
-        ImageView glyph = new ImageView(this);
-        glyph.setImageResource(R.drawable.ic_logo);
-        logo.addView(glyph, new FrameLayout.LayoutParams(dp(64), dp(64), Gravity.CENTER));
-        brand.addView(logo, new LinearLayout.LayoutParams(dp(112), dp(112)));
-
-        TextView title = new TextView(this);
-        title.setText(R.string.brand_title);
-        title.setTextColor(COLOR_TEXT);
-        title.setTextSize(46);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setLineSpacing(0f, 1.02f);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(-2, -2);
-        titleParams.topMargin = dp(28);
-        brand.addView(title, titleParams);
-
-        TextView subtitle = new TextView(this);
-        subtitle.setText(R.string.brand_subtitle);
-        subtitle.setTextColor(COLOR_MUTED);
-        subtitle.setTextSize(18);
-        LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(-2, -2);
-        subParams.topMargin = dp(20);
-        brand.addView(subtitle, subParams);
-
-        return brand;
     }
 
     private LinearLayout buildCard() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackgroundResource(R.drawable.bg_card);
-        card.setPadding(dp(44), dp(40), dp(44), dp(40));
+        card.setPadding(dp(40), dp(36), dp(40), dp(36));
 
-        TextView header = new TextView(this);
-        header.setText(R.string.pair_header);
-        header.setTextColor(COLOR_TEXT);
-        header.setTextSize(28);
-        header.setTypeface(Typeface.DEFAULT_BOLD);
-        card.addView(header, new LinearLayout.LayoutParams(-1, -2));
+        // header: logo + brand name
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
 
+        FrameLayout logo = new FrameLayout(this);
+        logo.setBackgroundResource(R.drawable.bg_logo);
+        ImageView glyph = new ImageView(this);
+        glyph.setImageResource(R.drawable.ic_logo);
+        logo.addView(glyph, new FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER));
+        headerRow.addView(logo, new LinearLayout.LayoutParams(dp(52), dp(52)));
+
+        TextView title = new TextView(this);
+        title.setText(R.string.brand_title);
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(26);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(-2, -2);
+        titleParams.setMarginStart(dp(16));
+        headerRow.addView(title, titleParams);
+        card.addView(headerRow, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText(R.string.brand_subtitle);
+        subtitle.setTextColor(COLOR_MUTED);
+        subtitle.setTextSize(16);
+        LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(-1, -2);
+        subParams.topMargin = dp(14);
+        card.addView(subtitle, subParams);
+
+        // body: steps + code (start), QR (end)
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(-1, -2);
-        bodyParams.topMargin = dp(20);
+        bodyParams.topMargin = dp(24);
         card.addView(body, bodyParams);
 
         LinearLayout left = new LinearLayout(this);
@@ -242,83 +230,83 @@ public class MainActivity extends Activity {
         TextView codeLabel = new TextView(this);
         codeLabel.setText(R.string.code_label);
         codeLabel.setTextColor(0xFF8FA7B5);
-        codeLabel.setTextSize(16);
+        codeLabel.setTextSize(15);
         LinearLayout.LayoutParams codeLabelParams = new LinearLayout.LayoutParams(-2, -2);
-        codeLabelParams.topMargin = dp(28);
-        codeLabelParams.bottomMargin = dp(10);
+        codeLabelParams.topMargin = dp(22);
+        codeLabelParams.bottomMargin = dp(8);
         left.addView(codeLabel, codeLabelParams);
 
         codeView = new TextView(this);
         codeView.setText("------");
         codeView.setTextColor(0xFFEAF4FB);
-        codeView.setTextSize(44);
+        codeView.setTextSize(40);
         codeView.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        codeView.setLetterSpacing(0.25f);
+        codeView.setLetterSpacing(0.2f);
         codeView.setBackgroundResource(R.drawable.bg_field);
-        codeView.setPadding(dp(24), dp(16), dp(24), dp(16));
+        codeView.setPadding(dp(22), dp(14), dp(22), dp(14));
         left.addView(codeView, new LinearLayout.LayoutParams(-2, -2));
 
         pairHint = new TextView(this);
         pairHint.setText(R.string.status_connecting);
         pairHint.setTextColor(COLOR_MUTED);
-        pairHint.setTextSize(16);
-        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-2, -2);
-        hintParams.topMargin = dp(14);
+        pairHint.setTextSize(15);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
+        hintParams.topMargin = dp(12);
         left.addView(pairHint, hintParams);
 
         LinearLayout right = new LinearLayout(this);
         right.setOrientation(LinearLayout.VERTICAL);
         right.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(-2, -2);
-        rightParams.leftMargin = dp(28);
+        rightParams.setMarginStart(dp(28));
         body.addView(right, rightParams);
 
         qrView = new ImageView(this);
         qrView.setBackgroundColor(0xFFFFFFFF);
         qrView.setPadding(dp(10), dp(10), dp(10), dp(10));
         qrView.setVisibility(View.INVISIBLE);
-        right.addView(qrView, new LinearLayout.LayoutParams(dp(190), dp(190)));
+        right.addView(qrView, new LinearLayout.LayoutParams(dp(176), dp(176)));
 
         TextView scanLabel = new TextView(this);
         scanLabel.setText(R.string.scan_label);
         scanLabel.setTextColor(COLOR_MUTED);
-        scanLabel.setTextSize(14);
+        scanLabel.setTextSize(13);
         scanLabel.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(dp(190), -2);
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(dp(176), -2);
         scanParams.topMargin = dp(10);
         right.addView(scanLabel, scanParams);
 
         progress = new ProgressBar(this);
         progress.setVisibility(View.GONE);
-        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(36), dp(36));
-        progressParams.topMargin = dp(22);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(32), dp(32));
+        progressParams.topMargin = dp(20);
         card.addView(progress, progressParams);
 
         LinearLayout statusRow = new LinearLayout(this);
         statusRow.setOrientation(LinearLayout.HORIZONTAL);
         statusRow.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams statusRowParams = new LinearLayout.LayoutParams(-1, -2);
-        statusRowParams.topMargin = dp(26);
+        statusRowParams.topMargin = dp(22);
         card.addView(statusRow, statusRowParams);
 
         statusDot = new View(this);
         statusDot.setBackgroundResource(R.drawable.dot);
         if (statusDot.getBackground() != null) statusDot.getBackground().setTint(DOT_WAITING);
         LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(12), dp(12));
-        dotParams.rightMargin = dp(12);
+        dotParams.setMarginEnd(dp(12));
         statusRow.addView(statusDot, dotParams);
 
         status = new TextView(this);
         status.setText(R.string.status_starting);
         status.setTextColor(0xFFCBE0EC);
-        status.setTextSize(18);
-        statusRow.addView(status, new LinearLayout.LayoutParams(-2, -2));
+        status.setTextSize(17);
+        statusRow.addView(status, new LinearLayout.LayoutParams(0, -2, 1f));
 
         return card;
     }
 
     private LinearLayout.LayoutParams stepParams() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.topMargin = dp(14);
         return params;
     }
@@ -335,14 +323,14 @@ public class MainActivity extends Activity {
         num.setGravity(Gravity.CENTER);
         num.setBackgroundResource(R.drawable.bg_field);
         LinearLayout.LayoutParams numParams = new LinearLayout.LayoutParams(dp(34), dp(34));
-        numParams.rightMargin = dp(14);
+        numParams.setMarginEnd(dp(14));
         step.addView(num, numParams);
 
         TextView text = new TextView(this);
         text.setText(label);
         text.setTextColor(0xFFC7D8E4);
-        text.setTextSize(18);
-        step.addView(text, new LinearLayout.LayoutParams(-2, -2));
+        text.setTextSize(17);
+        step.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
         return step;
     }
 
