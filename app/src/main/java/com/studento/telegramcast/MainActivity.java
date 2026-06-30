@@ -1,5 +1,7 @@
 package com.studento.telegramcast;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -19,6 +21,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
@@ -37,6 +40,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -52,9 +56,13 @@ public class MainActivity extends Activity {
     private static final String PREFS = "telegram_tv_cast";
     private static final String HISTORY_KEY = "history";
     private static final int FREE_HISTORY_LIMIT = 5;
+    private static final int FREE_QUEUE_LIMIT = 5;
     private static final int MAX_HISTORY_STORED = 30;
+    private static final float[] SPEEDS = {1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+    private static final String[] SPEED_LABELS = {"1.0x", "1.25x", "1.5x", "1.75x", "2.0x"};
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final ArrayDeque<String[]> queue = new ArrayDeque<>();
     private SharedPreferences prefs;
     private ScrollView setupView;
     private FrameLayout playerContainer;
@@ -66,16 +74,21 @@ public class MainActivity extends Activity {
     private View statusDot;
     private ImageView qrView;
     private TextView nowPlaying;
+    private TextView queueLabel;
+    private TextView speedBadge;
     private ProgressBar progress;
     private TextView proBadge;
     private TextView historyEmpty;
     private LinearLayout historyContainer;
+    private ObjectAnimator dotPulse;
 
     private volatile boolean running;
+    private volatile boolean regenerateRequested;
     private volatile String deviceId;
     private String botUsername = "";
     private boolean paired;
     private boolean premium;
+    private int speedIndex;
 
     private static String trimUrl(String url) {
         if (url == null) return "";
@@ -88,6 +101,7 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         buildUi();
         refreshHistory();
+        startDotPulse();
         if (SERVER_URL.isEmpty()) {
             setStatus(getString(R.string.status_not_configured), DOT_ERROR);
             return;
@@ -123,6 +137,7 @@ public class MainActivity extends Activity {
                 player.stop();
                 player.clearMediaItems();
             }
+            queue.clear();
             showSetup(getString(R.string.status_stopped));
             return true;
         }
@@ -149,7 +164,12 @@ public class MainActivity extends Activity {
             @Override
             public void onPlaybackStateChanged(int playbackState) {
                 if (playbackState == Player.STATE_ENDED) {
-                    showSetup(getString(R.string.status_complete));
+                    if (!queue.isEmpty()) {
+                        String[] next = queue.pollFirst();
+                        playMedia(next[0], next[1]);
+                    } else {
+                        showSetup(getString(R.string.status_complete));
+                    }
                 }
             }
 
@@ -164,13 +184,42 @@ public class MainActivity extends Activity {
         playerView.setUseController(true);
         playerContainer.addView(playerView, new FrameLayout.LayoutParams(-1, -1));
 
+        LinearLayout overlayTop = new LinearLayout(this);
+        overlayTop.setOrientation(LinearLayout.VERTICAL);
+        overlayTop.setPadding(dp(28), dp(22), dp(28), dp(22));
+
         nowPlaying = new TextView(this);
         nowPlaying.setText(R.string.now_playing_none);
         nowPlaying.setTextColor(COLOR_TEXT);
         nowPlaying.setTextSize(16);
         nowPlaying.setShadowLayer(8f, 0f, 2f, 0xCC000000);
-        nowPlaying.setPadding(dp(28), dp(22), dp(28), dp(22));
-        playerContainer.addView(nowPlaying, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
+        overlayTop.addView(nowPlaying, new LinearLayout.LayoutParams(-2, -2));
+
+        queueLabel = new TextView(this);
+        queueLabel.setTextColor(COLOR_MUTED);
+        queueLabel.setTextSize(14);
+        queueLabel.setShadowLayer(8f, 0f, 2f, 0xCC000000);
+        queueLabel.setVisibility(View.GONE);
+        LinearLayout.LayoutParams queueLabelParams = new LinearLayout.LayoutParams(-2, -2);
+        queueLabelParams.topMargin = dp(6);
+        overlayTop.addView(queueLabel, queueLabelParams);
+
+        playerContainer.addView(overlayTop, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
+
+        speedBadge = new TextView(this);
+        speedBadge.setText(SPEED_LABELS[0]);
+        speedBadge.setTextColor(0xFFEAF4FB);
+        speedBadge.setTextSize(15);
+        speedBadge.setTypeface(Typeface.DEFAULT_BOLD);
+        speedBadge.setGravity(Gravity.CENTER);
+        speedBadge.setBackgroundResource(R.drawable.btn_secondary);
+        speedBadge.setPadding(dp(18), dp(10), dp(18), dp(10));
+        speedBadge.setFocusable(true);
+        speedBadge.setClickable(true);
+        speedBadge.setOnClickListener(v -> cycleSpeed());
+        FrameLayout.LayoutParams speedParams = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+        speedParams.setMargins(0, 0, dp(28), dp(28));
+        playerContainer.addView(speedBadge, speedParams);
 
         root.addView(playerContainer, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
@@ -280,6 +329,20 @@ public class MainActivity extends Activity {
         hintParams.topMargin = dp(12);
         left.addView(pairHint, hintParams);
 
+        Button newCodeButton = new Button(this);
+        newCodeButton.setText(R.string.new_code_action);
+        newCodeButton.setAllCaps(false);
+        newCodeButton.setTextColor(0xFF5FC2EE);
+        newCodeButton.setTextSize(14);
+        newCodeButton.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        newCodeButton.setBackgroundResource(R.drawable.btn_secondary);
+        newCodeButton.setStateListAnimator(null);
+        newCodeButton.setPadding(dp(14), dp(8), dp(14), dp(8));
+        newCodeButton.setOnClickListener(v -> requestNewCode());
+        LinearLayout.LayoutParams newCodeParams = new LinearLayout.LayoutParams(-2, -2);
+        newCodeParams.topMargin = dp(10);
+        left.addView(newCodeButton, newCodeParams);
+
         LinearLayout right = new LinearLayout(this);
         right.setOrientation(LinearLayout.VERTICAL);
         right.setGravity(Gravity.CENTER);
@@ -357,6 +420,21 @@ public class MainActivity extends Activity {
         perksParams.topMargin = dp(20);
         card.addView(perks, perksParams);
 
+        Button premiumCta = new Button(this);
+        premiumCta.setText(R.string.premium_cta);
+        premiumCta.setAllCaps(false);
+        premiumCta.setTextColor(0xFF06202C);
+        premiumCta.setTypeface(Typeface.DEFAULT_BOLD);
+        premiumCta.setTextSize(15);
+        premiumCta.setBackgroundResource(R.drawable.btn_pro);
+        premiumCta.setStateListAnimator(null);
+        premiumCta.setPadding(dp(18), dp(10), dp(18), dp(10));
+        premiumCta.setOnClickListener(v ->
+                Toast.makeText(this, R.string.premium_coming_soon, Toast.LENGTH_SHORT).show());
+        LinearLayout.LayoutParams ctaParams = new LinearLayout.LayoutParams(-2, -2);
+        ctaParams.topMargin = dp(12);
+        card.addView(premiumCta, ctaParams);
+
         return card;
     }
 
@@ -396,6 +474,13 @@ public class MainActivity extends Activity {
             sleep(4000);
         }
         while (running) {
+            if (regenerateRequested) {
+                regenerateRequested = false;
+                while (running && !register()) {
+                    sleep(4000);
+                }
+                continue;
+            }
             try {
                 String body = httpGet(SERVER_URL + "/api/poll?deviceId=" + deviceId, 30000);
                 JSONObject json = new JSONObject(body);
@@ -403,7 +488,10 @@ public class MainActivity extends Activity {
                 if (nowPaired && !paired) {
                     paired = true;
                     showStatus(getString(R.string.status_paired), DOT_LIVE);
-                    handler.post(() -> pairHint.setText(getString(R.string.pair_hint_paired, botUsername)));
+                    handler.post(() -> {
+                        pairHint.setText(getString(R.string.pair_hint_paired, botUsername));
+                        stopDotPulse();
+                    });
                 }
                 JSONObject command = json.optJSONObject("command");
                 if (command != null) {
@@ -449,7 +537,7 @@ public class MainActivity extends Activity {
                 final String url = command.optString("url", "");
                 final String label = command.optString("label", url);
                 if (!url.isEmpty()) {
-                    handler.post(() -> playMedia(url, label));
+                    handler.post(() -> enqueueOrPlay(url, label));
                 }
                 break;
             case "pause":
@@ -462,7 +550,26 @@ public class MainActivity extends Activity {
                 handler.post(() -> {
                     player.stop();
                     player.clearMediaItems();
+                    queue.clear();
                     showSetup(getString(R.string.status_stopped_telegram));
+                });
+                break;
+            case "skip":
+                handler.post(() -> {
+                    if (!queue.isEmpty()) {
+                        String[] next = queue.pollFirst();
+                        playMedia(next[0], next[1]);
+                    } else {
+                        player.stop();
+                        player.clearMediaItems();
+                        showSetup(getString(R.string.status_stopped_telegram));
+                    }
+                });
+                break;
+            case "clear":
+                handler.post(() -> {
+                    queue.clear();
+                    updateQueueLabel();
                 });
                 break;
             default:
@@ -499,8 +606,7 @@ public class MainActivity extends Activity {
 
     private void showSetup(String message) {
         handler.post(() -> {
-            playerContainer.setVisibility(View.GONE);
-            setupView.setVisibility(View.VISIBLE);
+            crossfade(setupView, playerContainer);
             nowPlaying.setText(R.string.now_playing_none);
             if (message != null) setStatus(message, paired ? DOT_LIVE : DOT_WAITING);
         });
@@ -508,10 +614,24 @@ public class MainActivity extends Activity {
 
     private void showPlayer() {
         handler.post(() -> {
-            setupView.setVisibility(View.GONE);
-            playerContainer.setVisibility(View.VISIBLE);
+            crossfade(playerContainer, setupView);
             playerView.requestFocus();
         });
+    }
+
+    private void crossfade(View showView, View hideView) {
+        if (showView.getVisibility() == View.VISIBLE && hideView.getVisibility() == View.GONE) {
+            return;
+        }
+        showView.animate().cancel();
+        hideView.animate().cancel();
+        showView.setAlpha(0f);
+        showView.setVisibility(View.VISIBLE);
+        showView.animate().alpha(1f).setDuration(220).start();
+        hideView.animate().alpha(0f).setDuration(180).withEndAction(() -> {
+            hideView.setVisibility(View.GONE);
+            hideView.setAlpha(1f);
+        }).start();
     }
 
     private void togglePlayback() {
@@ -522,15 +642,85 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ---------------------------------------------------------------- playback + history
+    // ---------------------------------------------------------------- playback + queue + history
 
     private void playMedia(String url, String label) {
         nowPlaying.setText(getString(R.string.now_playing_fmt, label));
+        speedIndex = 0;
+        speedBadge.setText(SPEED_LABELS[0]);
+        player.setPlaybackSpeed(SPEEDS[0]);
         player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
         player.prepare();
         player.setPlayWhenReady(true);
         showPlayer();
         recordHistory(url, label);
+        updateQueueLabel();
+    }
+
+    private void enqueueOrPlay(String url, String label) {
+        boolean currentlyPlaying = playerContainer.getVisibility() == View.VISIBLE
+                && player.getPlaybackState() != Player.STATE_IDLE
+                && player.getPlaybackState() != Player.STATE_ENDED;
+        if (!currentlyPlaying) {
+            playMedia(url, label);
+            return;
+        }
+        int limit = premium ? Integer.MAX_VALUE : FREE_QUEUE_LIMIT;
+        if (queue.size() >= limit) {
+            Toast.makeText(this, R.string.queue_full_toast, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        queue.addLast(new String[]{url, label});
+        updateQueueLabel();
+    }
+
+    private void updateQueueLabel() {
+        if (queue.isEmpty()) {
+            queueLabel.setVisibility(View.GONE);
+            return;
+        }
+        String[] next = queue.peekFirst();
+        String text = getString(R.string.queue_next_fmt, next[1]);
+        if (queue.size() > 1) {
+            text += getString(R.string.queue_more_fmt, queue.size() - 1);
+        }
+        queueLabel.setText(text);
+        queueLabel.setVisibility(View.VISIBLE);
+    }
+
+    private void cycleSpeed() {
+        if (!premium) {
+            Toast.makeText(this, R.string.premium_speed_locked, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        speedIndex = (speedIndex + 1) % SPEEDS.length;
+        player.setPlaybackSpeed(SPEEDS[speedIndex]);
+        speedBadge.setText(SPEED_LABELS[speedIndex]);
+    }
+
+    private void requestNewCode() {
+        if (deviceId == null) return;
+        paired = false;
+        startDotPulse();
+        setStatus(getString(R.string.status_generating_code), DOT_WAITING);
+        regenerateRequested = true;
+    }
+
+    private void startDotPulse() {
+        if (dotPulse != null || statusDot == null) return;
+        dotPulse = ObjectAnimator.ofFloat(statusDot, "alpha", 1f, 0.35f);
+        dotPulse.setDuration(900);
+        dotPulse.setRepeatMode(ValueAnimator.REVERSE);
+        dotPulse.setRepeatCount(ValueAnimator.INFINITE);
+        dotPulse.start();
+    }
+
+    private void stopDotPulse() {
+        if (dotPulse != null) {
+            dotPulse.cancel();
+            dotPulse = null;
+        }
+        if (statusDot != null) statusDot.setAlpha(1f);
     }
 
     private void recordHistory(String url, String label) {
