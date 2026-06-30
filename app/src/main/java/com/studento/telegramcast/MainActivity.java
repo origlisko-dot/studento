@@ -1,6 +1,7 @@
 package com.studento.telegramcast;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -11,6 +12,7 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -47,7 +49,13 @@ public class MainActivity extends Activity {
     private static final int DOT_LIVE = 0xFF43C463;
     private static final int DOT_ERROR = 0xFFE0584F;
 
+    private static final String PREFS = "telegram_tv_cast";
+    private static final String HISTORY_KEY = "history";
+    private static final int FREE_HISTORY_LIMIT = 5;
+    private static final int MAX_HISTORY_STORED = 30;
+
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private SharedPreferences prefs;
     private ScrollView setupView;
     private FrameLayout playerContainer;
     private PlayerView playerView;
@@ -59,11 +67,15 @@ public class MainActivity extends Activity {
     private ImageView qrView;
     private TextView nowPlaying;
     private ProgressBar progress;
+    private TextView proBadge;
+    private TextView historyEmpty;
+    private LinearLayout historyContainer;
 
     private volatile boolean running;
     private volatile String deviceId;
     private String botUsername = "";
     private boolean paired;
+    private boolean premium;
 
     private static String trimUrl(String url) {
         if (url == null) return "";
@@ -73,7 +85,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         buildUi();
+        refreshHistory();
         if (SERVER_URL.isEmpty()) {
             setStatus(getString(R.string.status_not_configured), DOT_ERROR);
             return;
@@ -199,9 +213,21 @@ public class MainActivity extends Activity {
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(26);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(-2, -2);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1f);
         titleParams.setMarginStart(dp(16));
         headerRow.addView(title, titleParams);
+
+        proBadge = new TextView(this);
+        proBadge.setText(R.string.badge_pro);
+        proBadge.setTextColor(0xFF06202C);
+        proBadge.setTextSize(13);
+        proBadge.setTypeface(Typeface.DEFAULT_BOLD);
+        proBadge.setGravity(Gravity.CENTER);
+        proBadge.setBackgroundResource(R.drawable.bg_pro);
+        proBadge.setPadding(dp(14), dp(5), dp(14), dp(5));
+        proBadge.setVisibility(View.GONE);
+        headerRow.addView(proBadge, new LinearLayout.LayoutParams(-2, -2));
+
         card.addView(headerRow, new LinearLayout.LayoutParams(-1, -2));
 
         TextView subtitle = new TextView(this);
@@ -302,6 +328,35 @@ public class MainActivity extends Activity {
         status.setTextSize(17);
         statusRow.addView(status, new LinearLayout.LayoutParams(0, -2, 1f));
 
+        // recently played (free feature)
+        TextView historyTitle = new TextView(this);
+        historyTitle.setText(R.string.history_title);
+        historyTitle.setTextColor(0xFF8FA7B5);
+        historyTitle.setTextSize(15);
+        LinearLayout.LayoutParams historyTitleParams = new LinearLayout.LayoutParams(-1, -2);
+        historyTitleParams.topMargin = dp(24);
+        historyTitleParams.bottomMargin = dp(8);
+        card.addView(historyTitle, historyTitleParams);
+
+        historyEmpty = new TextView(this);
+        historyEmpty.setText(R.string.history_empty);
+        historyEmpty.setTextColor(COLOR_MUTED);
+        historyEmpty.setTextSize(14);
+        card.addView(historyEmpty, new LinearLayout.LayoutParams(-1, -2));
+
+        historyContainer = new LinearLayout(this);
+        historyContainer.setOrientation(LinearLayout.VERTICAL);
+        card.addView(historyContainer, new LinearLayout.LayoutParams(-1, -2));
+
+        // premium teaser (freemium scaffold)
+        TextView perks = new TextView(this);
+        perks.setText(R.string.premium_perks);
+        perks.setTextColor(0xFF6E8595);
+        perks.setTextSize(13);
+        LinearLayout.LayoutParams perksParams = new LinearLayout.LayoutParams(-1, -2);
+        perksParams.topMargin = dp(20);
+        card.addView(perks, perksParams);
+
         return card;
     }
 
@@ -369,12 +424,15 @@ public class MainActivity extends Activity {
             deviceId = json.getString("deviceId");
             final String code = json.getString("code");
             botUsername = json.optString("botUsername", "");
+            premium = json.optBoolean("premium", false);
             handler.post(() -> {
                 codeView.setText(code);
                 pairHint.setText(botUsername.isEmpty()
                         ? getString(R.string.pair_hint_open_generic)
                         : getString(R.string.pair_hint_open_named, botUsername));
                 renderQr(code);
+                proBadge.setVisibility(premium ? View.VISIBLE : View.GONE);
+                refreshHistory();
                 setStatus(getString(R.string.status_waiting_pairing), DOT_WAITING);
             });
             return true;
@@ -391,13 +449,7 @@ public class MainActivity extends Activity {
                 final String url = command.optString("url", "");
                 final String label = command.optString("label", url);
                 if (!url.isEmpty()) {
-                    handler.post(() -> {
-                        nowPlaying.setText(getString(R.string.now_playing_fmt, label));
-                        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
-                        player.prepare();
-                        player.setPlayWhenReady(true);
-                        showPlayer();
-                    });
+                    handler.post(() -> playMedia(url, label));
                 }
                 break;
             case "pause":
@@ -467,6 +519,85 @@ public class MainActivity extends Activity {
             player.pause();
         } else {
             player.play();
+        }
+    }
+
+    // ---------------------------------------------------------------- playback + history
+
+    private void playMedia(String url, String label) {
+        nowPlaying.setText(getString(R.string.now_playing_fmt, label));
+        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
+        player.prepare();
+        player.setPlayWhenReady(true);
+        showPlayer();
+        recordHistory(url, label);
+    }
+
+    private void recordHistory(String url, String label) {
+        try {
+            org.json.JSONArray arr = loadHistory();
+            org.json.JSONArray next = new org.json.JSONArray();
+            org.json.JSONObject head = new org.json.JSONObject();
+            head.put("url", url);
+            head.put("label", label);
+            next.put(head);
+            for (int i = 0; i < arr.length() && next.length() < MAX_HISTORY_STORED; i++) {
+                org.json.JSONObject item = arr.optJSONObject(i);
+                if (item != null && !url.equals(item.optString("url"))) {
+                    next.put(item);
+                }
+            }
+            prefs.edit().putString(HISTORY_KEY, next.toString()).apply();
+            handler.post(this::refreshHistory);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private org.json.JSONArray loadHistory() {
+        try {
+            return new org.json.JSONArray(prefs.getString(HISTORY_KEY, "[]"));
+        } catch (Exception e) {
+            return new org.json.JSONArray();
+        }
+    }
+
+    private void refreshHistory() {
+        if (historyContainer == null) return;
+        historyContainer.removeAllViews();
+        org.json.JSONArray arr = loadHistory();
+        historyEmpty.setVisibility(arr.length() == 0 ? View.VISIBLE : View.GONE);
+
+        int limit = premium ? arr.length() : Math.min(arr.length(), FREE_HISTORY_LIMIT);
+        for (int i = 0; i < limit; i++) {
+            org.json.JSONObject item = arr.optJSONObject(i);
+            if (item == null) continue;
+            final String url = item.optString("url");
+            final String label = item.optString("label", url);
+            Button row = new Button(this);
+            row.setText(label);
+            row.setSingleLine(true);
+            row.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            row.setAllCaps(false);
+            row.setTextColor(0xFFEAF4FB);
+            row.setTextSize(15);
+            row.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+            row.setBackgroundResource(R.drawable.btn_secondary);
+            row.setStateListAnimator(null);
+            row.setPadding(dp(18), dp(10), dp(18), dp(10));
+            row.setOnClickListener(v -> playMedia(url, label));
+            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, -2);
+            rp.topMargin = dp(8);
+            historyContainer.addView(row, rp);
+        }
+
+        if (!premium && arr.length() > FREE_HISTORY_LIMIT) {
+            TextView more = new TextView(this);
+            more.setText(getString(R.string.premium_history_locked));
+            more.setTextColor(0xFF5FC2EE);
+            more.setTextSize(14);
+            LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1, -2);
+            mp.topMargin = dp(10);
+            historyContainer.addView(more, mp);
         }
     }
 

@@ -103,7 +103,8 @@ app.post('/api/register', (_req, res) => {
   const code = genCode();
   devices.set(deviceId, { code, chatId: null, queue: [], waiters: [], createdAt: Date.now() });
   codeToDevice.set(code, deviceId);
-  res.json({ deviceId, code, botUsername: BOT_USERNAME });
+  // premium entitlement is a stub for now (freemium scaffold); wire to billing later.
+  res.json({ deviceId, code, botUsername: BOT_USERNAME, premium: false });
 });
 
 // ---- TV: long-poll for the next command / pairing status ----

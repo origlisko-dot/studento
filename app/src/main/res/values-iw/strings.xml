@@ -28,4 +28,10 @@
 
     <string name="now_playing_none">לא מתנגן וידאו.</string>
     <string name="now_playing_fmt">מתנגן כעת: %1$s</string>
+
+    <string name="history_title">הופעלו לאחרונה</string>
+    <string name="history_empty">סרטונים ששידרת יופיעו כאן.</string>
+    <string name="badge_pro">PRO</string>
+    <string name="premium_history_locked">היסטוריה ללא הגבלה עם Premium</string>
+    <string name="premium_perks">Premium (בקרוב): היסטוריה ללא הגבלה · פלייליסטים · 4K · בלי הגבלות</string>
 </resources>
