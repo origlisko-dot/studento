@@ -37,7 +37,7 @@
     <string name="premium_cta">Unlock Premium</string>
     <string name="premium_coming_soon">Premium is coming soon!</string>
 
-    <string name="new_code_action">↻ Get a new code</string>
+    <string name="new_code_action">Get a new code</string>
     <string name="status_generating_code">Generating a new code…</string>
 
     <string name="queue_next_fmt">Up next: %1$s</string>
