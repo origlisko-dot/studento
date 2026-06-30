@@ -1,12 +1,9 @@
 # Privacy Policy — Telegram TV Cast
 
-_Last updated: 2026-06-29_
+_Last updated: 2026-06-30_
 
 Telegram TV Cast ("the app") lets you play videos on your TV by sending them to a
 Telegram bot. This policy explains what data is involved.
-
-> Replace the contact email and operator name below with your own before
-> publishing, and host this page at a public URL for the Google Play listing.
 
 ## What the app stores on your device
 
@@ -54,5 +51,5 @@ This policy may be updated; the "last updated" date will change accordingly.
 
 ## Contact
 
-- Operator: _your name or company_
-- Email: _your-contact@example.com_
+- Operator: Studento
+- Email: origlisko@gmail.com
