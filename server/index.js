@@ -14,6 +14,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const { Readable } = require('stream');
 
@@ -88,6 +89,59 @@ function notifyPaired(deviceId) {
 
 // ---- health ----
 app.get('/', (_req, res) => res.json({ ok: true, service: 'telegram-tv-cast' }));
+
+// ---- privacy policy (public URL required by Google Play) ----
+function markdownToHtml(md) {
+  const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = (s) => s
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>');
+
+  const blocks = escape(md).split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  let html = '';
+  for (const block of blocks) {
+    const lines = block.split('\n').map((l) => l.trim());
+    if (/^# /.test(lines[0]) && lines.length === 1) {
+      html += '<h1>' + inline(lines[0].replace(/^# /, '')) + '</h1>';
+    } else if (/^## /.test(lines[0]) && lines.length === 1) {
+      html += '<h2>' + inline(lines[0].replace(/^## /, '')) + '</h2>';
+    } else if (lines[0].startsWith('- ')) {
+      html += '<ul>';
+      let item = '';
+      for (const line of lines) {
+        if (line.startsWith('- ')) {
+          if (item) html += '<li>' + inline(item) + '</li>';
+          item = line.replace(/^- /, '');
+        } else {
+          item += ' ' + line;
+        }
+      }
+      if (item) html += '<li>' + inline(item) + '</li>';
+      html += '</ul>';
+    } else {
+      html += '<p>' + inline(lines.join(' ')) + '</p>';
+    }
+  }
+  return html;
+}
+
+app.get('/privacy', (_req, res) => {
+  fs.readFile(path.join(__dirname, '..', 'PRIVACY.md'), 'utf8', (err, md) => {
+    if (err) return res.status(404).send('Privacy policy not found');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Telegram TV Cast</title>
+<style>
+  body{font-family:-apple-system,Roboto,Segoe UI,sans-serif;max-width:720px;margin:40px auto;
+       padding:0 20px;color:#0B1B28;line-height:1.55}
+  h1{font-size:28px} h2{font-size:20px;margin-top:32px;color:#1B6F9C}
+  a{color:#229ED9} code{background:#f0f3f5;padding:2px 5px;border-radius:4px}
+</style></head><body>${markdownToHtml(md)}</body></html>`);
+  });
+});
 
 // ---- APK download (for sideloading on a TV via the Downloader app) ----
 app.get(['/app', '/app.apk'], (_req, res) => {
