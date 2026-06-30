@@ -173,14 +173,22 @@ app/
       drawable/                 # all visual assets (see §4)
       values/ , values-iw/      # strings only (+ one unused color, one theme)
 server/
-  index.js                      # Express app: pairing, Telegram webhook, media proxy, /app APK download
+  index.js                      # Express app: pairing, Telegram webhook, media proxy, /app APK download, /privacy
+  PRIVACY.md                    # served live at GET /privacy (must live under server/ — see deploy notes)
   public/telegram-tv-cast.apk   # checked-in build artifact served for sideloading
 docs/
   play/                         # Google Play store-listing graphics (not used by the app)
   STORE_LISTING.md
 render.yaml, Procfile           # Railway/Render deploy config for server/
-RELEASE.md, PRIVACY.md          # publishing docs
+RELEASE.md                      # publishing docs
 ```
+
+**Deploy gotcha**: the hosting platforms used here (Railway/Render) are configured
+with the service **Root Directory set to `server/`**, so only files under
+`server/` are present in the deployed container — anything at the repo root
+(docs, top-level configs) is invisible to the running server at runtime. Any
+file the server needs to read at runtime (like `PRIVACY.md`) must live inside
+`server/`, not at the repo root.
 
 **Feature organization**: there isn't any — this is a single-Activity,
 single-file Android app (~700 lines) plus a single-file backend. New

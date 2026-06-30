@@ -46,7 +46,8 @@ and branding to taste before publishing.
 - [ ] Google Play Developer account ($25 one-time).
 - [ ] Build a **signed** release **AAB** with your own keystore (see `RELEASE.md`).
 - [ ] Set `server.url` to your deployed backend before building the release.
-- [ ] Host `PRIVACY.md` at a public URL and add it to the listing.
+- [ ] Add the privacy policy URL to the listing — already live at
+      `https://<your-server>/privacy`, no separate hosting needed.
 - [ ] Complete the Data safety form: device ID + pairing code (app), chat ID +
       submitted media (service); transient, not sold, not for ads.
 - [ ] Complete the content rating questionnaire.
